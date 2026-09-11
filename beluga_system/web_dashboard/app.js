@@ -8,7 +8,7 @@
  * - Sesli komut icin Web Speech API kullanir
  */
 
-const GATEWAY_URL = window.BELUGA_GATEWAY_URL || "https://beluga-gateway.onrender.com";
+const GATEWAY_URL = window.BELUGA_GATEWAY_URL || "https://belugasys.onrender.com";
 
 let socket = null;
 let devices = JSON.parse(localStorage.getItem("beluga_devices") || "[]");
