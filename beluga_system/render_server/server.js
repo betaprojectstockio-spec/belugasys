@@ -22,7 +22,8 @@ const { Server } = require("socket.io");
 const crypto = require("crypto");
 
 const PORT = process.env.PORT || 10000;
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "*").split(",");
+const rawOrigins = process.env.ALLOWED_ORIGINS || "*";
+const ALLOWED_ORIGINS = rawOrigins === "*" ? "*" : rawOrigins.split(",");
 const HEARTBEAT_INTERVAL_MS = parseInt(process.env.HEARTBEAT_INTERVAL_MS || "240000", 10);
 const PAIRING_TTL_SECONDS = parseInt(process.env.PAIRING_TTL_SECONDS || "300", 10);
 const SELF_URL = process.env.SELF_URL || "";
