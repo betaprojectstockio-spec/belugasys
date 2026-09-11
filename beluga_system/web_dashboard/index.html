@@ -1,1 +1,59 @@
-<h1>GÜNCELLEME</h1>
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>B.E.L.U.G.A Kontrol Paneli</title>
+<link rel="stylesheet" href="style.css" />
+<script src="https://cdn.jsdelivr.net/npm/socket.io-client@4/dist/socket.io.min.js"></script>
+</head>
+<body>
+  <header class="beluga-header">
+    <h1>B.E.L.U.G.A</h1>
+    <span class="subtitle">Kisisel Otomasyon ve Asistanlik Sistemi</span>
+  </header>
+
+  <main class="grid">
+    <section class="panel devices-panel">
+      <h2>Yetkili Cihazlar</h2>
+      <ul id="deviceList" class="device-list"></ul>
+      <button id="addDeviceBtn">+ Yeni Cihaz Ekle (QR)</button>
+    </section>
+
+    <section class="panel console-panel">
+      <h2>Komut Konsolu <span id="activeDeviceLabel"></span></h2>
+      <div id="consoleLog" class="console-log"></div>
+
+      <div class="command-bar">
+        <button id="micBtn" title="Sesli komut">🎤</button>
+        <input id="commandInput" type="text" placeholder="Bir komut yazin (orn: sistem durumunu goster)" />
+        <button id="sendBtn">Gonder</button>
+      </div>
+
+      <div class="quick-actions">
+        <button data-cmd="system_status">Sistem Durumu</button>
+        <button data-cmd="screenshot">Ekran Goruntusu</button>
+        <button data-cmd="lock_screen">Ekrani Kilitle</button>
+      </div>
+
+      <img id="screenshotPreview" class="screenshot-preview" alt="" />
+    </section>
+  </main>
+
+  <div id="pairingModal" class="modal hidden">
+    <div class="modal-content">
+      <h2>Yeni Cihaz Eslestir</h2>
+      <label>Cihaz Adi <input id="pairDeviceName" placeholder="Ev PC" /></label>
+      <label>Seri Numarasi <input id="pairSerial" placeholder="BELUGA-HOME-PC-0001" /></label>
+      <label>Paylasilan Parola (pairing_secret) <input id="pairSecret" type="password" /></label>
+      <button id="generatePairBtn">Eslestirme QR Kodu Uret</button>
+      <div id="qrCodeContainer"></div>
+      <p class="hint">Bu QR kodunu / bilgileri Local Agent'in config.json dosyasina girin.</p>
+      <button id="closePairingBtn">Kapat</button>
+    </div>
+  </div>
+
+  <script src="crypto-e2ee.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
