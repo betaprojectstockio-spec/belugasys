@@ -1,59 +1,403 @@
 <!DOCTYPE html>
 <html lang="tr">
+
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>B.E.L.U.G.A Kontrol Paneli</title>
-<link rel="stylesheet" href="style.css" />
-<script src="https://cdn.jsdelivr.net/npm/socket.io-client@4/dist/socket.io.min.js"></script>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>BELUGA</title>
+
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
+
+    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4/dist/socket.io.min.js"></script>
 </head>
+
 <body>
-  <header class="beluga-header">
-    <h1>B.E.L.U.G.A</h1>
-    <span class="subtitle">Kisisel Otomasyon ve Asistanlik Sistemi</span>
-  </header>
 
-  <main class="grid">
-    <section class="panel devices-panel">
-      <h2>Yetkili Cihazlar</h2>
-      <ul id="deviceList" class="device-list"></ul>
-      <button id="addDeviceBtn">+ Yeni Cihaz Ekle (QR)</button>
-    </section>
+<div id="authScreen" class="auth-screen">
 
-    <section class="panel console-panel">
-      <h2>Komut Konsolu <span id="activeDeviceLabel"></span></h2>
-      <div id="consoleLog" class="console-log"></div>
+    <div class="auth-card">
 
-      <div class="command-bar">
-        <button id="micBtn" title="Sesli komut">🎤</button>
-        <input id="commandInput" type="text" placeholder="Bir komut yazin (orn: sistem durumunu goster)" />
-        <button id="sendBtn">Gonder</button>
-      </div>
+        <div class="logo">
+            B.E.L.U.G.A
+        </div>
 
-      <div class="quick-actions">
-        <button data-cmd="system_status">Sistem Durumu</button>
-        <button data-cmd="screenshot">Ekran Goruntusu</button>
-        <button data-cmd="lock_screen">Ekrani Kilitle</button>
-      </div>
+        <div class="auth-subtitle">
+            Personal AI Control System
+        </div>
 
-      <img id="screenshotPreview" class="screenshot-preview" alt="" />
-    </section>
-  </main>
+        <div id="loginBox">
 
-  <div id="pairingModal" class="modal hidden">
-    <div class="modal-content">
-      <h2>Yeni Cihaz Eslestir</h2>
-      <label>Cihaz Adi <input id="pairDeviceName" placeholder="Ev PC" /></label>
-      <label>Seri Numarasi <input id="pairSerial" placeholder="BELUGA-HOME-PC-0001" /></label>
-      <label>Paylasilan Parola (pairing_secret) <input id="pairSecret" type="password" /></label>
-      <button id="generatePairBtn">Eslestirme QR Kodu Uret</button>
-      <div id="qrCodeContainer"></div>
-      <p class="hint">Bu QR kodunu / bilgileri Local Agent'in config.json dosyasina girin.</p>
-      <button id="closePairingBtn">Kapat</button>
+            <h2>Hoş geldin</h2>
+
+            <input
+                id="loginUsername"
+                type="text"
+                placeholder="Kullanıcı adı"
+            >
+
+            <input
+                id="loginPassword"
+                type="password"
+                placeholder="Parola"
+            >
+
+            <button id="loginBtn">
+                Giriş Yap
+            </button>
+
+            <button
+                id="showRegisterBtn"
+                class="secondary"
+            >
+                Hesap Oluştur
+            </button>
+
+        </div>
+
+        <div
+            id="registerBox"
+            class="hidden"
+        >
+
+            <h2>Yeni Beluga hesabı</h2>
+
+            <input
+                id="registerUsername"
+                type="text"
+                placeholder="Kullanıcı adı"
+            >
+
+            <input
+                id="registerPassword"
+                type="password"
+                placeholder="Parola"
+            >
+
+            <input
+                id="registerPassword2"
+                type="password"
+                placeholder="Parola tekrar"
+            >
+
+            <button id="registerBtn">
+                Hesap Oluştur
+            </button>
+
+            <button
+                id="showLoginBtn"
+                class="secondary"
+            >
+                Giriş Yap
+            </button>
+
+        </div>
+
+        <div
+            id="authError"
+            class="auth-error"
+        ></div>
+
     </div>
-  </div>
 
-  <script src="crypto-e2ee.js"></script>
-  <script src="app.js"></script>
+</div>
+
+
+<div
+    id="app"
+    class="app hidden"
+>
+
+    <aside class="sidebar">
+
+        <div class="brand">
+            BELUGA
+        </div>
+
+        <nav>
+
+            <button
+                class="nav-item active"
+                data-page="dashboard"
+            >
+                Dashboard
+            </button>
+
+            <button
+                class="nav-item"
+                data-page="brain"
+            >
+                AI Brain
+            </button>
+
+            <button
+                class="nav-item"
+                data-page="devices"
+            >
+                Cihazlar
+            </button>
+
+            <button
+                class="nav-item"
+                data-page="history"
+            >
+                Geçmiş
+            </button>
+
+            <button
+                class="nav-item"
+                data-page="settings"
+            >
+                Ayarlar
+            </button>
+
+        </nav>
+
+        <div class="account-area">
+
+            <div
+                id="usernameLabel"
+                class="username"
+            ></div>
+
+            <button id="logoutBtn">
+                Çıkış Yap
+            </button>
+
+        </div>
+
+    </aside>
+
+
+    <main class="content">
+
+        <section
+            id="dashboardPage"
+            class="page active"
+        >
+
+            <div class="page-header">
+                <h1>Dashboard</h1>
+                <span id="gatewayStatus">
+                    Gateway kontrol ediliyor...
+                </span>
+            </div>
+
+            <div class="cards">
+
+                <div class="card">
+                    <span>Gateway</span>
+                    <strong id="gatewayCard">
+                        —
+                    </strong>
+                </div>
+
+                <div class="card">
+                    <span>Cihazlar</span>
+                    <strong id="deviceCount">
+                        0
+                    </strong>
+                </div>
+
+                <div class="card">
+                    <span>Beluga Brain</span>
+                    <strong>
+                        READY
+                    </strong>
+                </div>
+
+            </div>
+
+            <div class="hero">
+
+                <div>
+                    <span class="eyebrow">
+                        B.E.L.U.G.A BRAIN
+                    </span>
+
+                    <h2>
+                        Beluga'ya ne yaptırmak istiyorsun?
+                    </h2>
+
+                    <p>
+                        Doğal dilde komut ver.
+                        Beluga isteğini analiz edip
+                        uygun işlemleri planlayacak.
+                    </p>
+                </div>
+
+                <button id="openBrainBtn">
+                    AI Brain'i Aç
+                </button>
+
+            </div>
+
+        </section>
+
+
+        <section
+            id="brainPage"
+            class="page"
+        >
+
+            <div class="page-header">
+                <h1>AI Brain</h1>
+                <span id="activeDeviceLabel">
+                    Cihaz seçilmedi
+                </span>
+            </div>
+
+            <div class="brain-box">
+
+                <div
+                    id="consoleLog"
+                    class="console"
+                ></div>
+
+                <div class="command-row">
+
+                    <input
+                        id="commandInput"
+                        placeholder="Örn: Chrome'u aç ve YouTube'a gir"
+                    >
+
+                    <button id="sendBtn">
+                        Gönder
+                    </button>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <section
+            id="devicesPage"
+            class="page"
+        >
+
+            <div class="page-header">
+
+                <h1>Cihazlar</h1>
+
+                <button id="addDeviceBtn">
+                    + Cihaz Ekle
+                </button>
+
+            </div>
+
+            <div
+                id="deviceList"
+                class="device-grid"
+            ></div>
+
+        </section>
+
+
+        <section
+            id="historyPage"
+            class="page"
+        >
+
+            <div class="page-header">
+                <h1>Geçmiş</h1>
+            </div>
+
+            <div
+                id="historyList"
+                class="history"
+            ></div>
+
+        </section>
+
+
+        <section
+            id="settingsPage"
+            class="page"
+        >
+
+            <div class="page-header">
+                <h1>Ayarlar</h1>
+            </div>
+
+            <div class="settings-card">
+
+                <h3>Hesap</h3>
+
+                <p>
+                    Kullanıcı:
+                    <strong id="settingsUsername">
+                        —
+                    </strong>
+                </p>
+
+                <p>
+                    Oturum:
+                    <strong>
+                        30 gün
+                    </strong>
+                </p>
+
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+
+<div
+    id="deviceModal"
+    class="modal hidden"
+>
+
+    <div class="modal-card">
+
+        <h2>Cihaz Ekle</h2>
+
+        <input
+            id="deviceName"
+            placeholder="Cihaz adı"
+        >
+
+        <input
+            id="deviceSerial"
+            placeholder="Cihaz seri numarası"
+        >
+
+        <input
+            id="deviceSecret"
+            type="password"
+            placeholder="Pairing secret"
+        >
+
+        <button id="saveDeviceBtn">
+            Cihazı Kaydet
+        </button>
+
+        <button
+            id="closeDeviceBtn"
+            class="secondary"
+        >
+            Vazgeç
+        </button>
+
+    </div>
+
+</div>
+
+
+<script src="crypto-e2ee.js"></script>
+<script src="app.js"></script>
+
 </body>
 </html>
