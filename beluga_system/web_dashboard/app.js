@@ -1,193 +1,945 @@
-/**
- * B.E.L.U.G.A Web Dashboard
- * ----------------------------
- * - Gateway'e Socket.io ile baglanir (rolu: 'dashboard')
- * - Cihazlari (localStorage'da SADECE serial/isim/pairing_secret referansi
- *   olarak, sifreli olmayan sunucu tarafinda degil, TARAYICIDA tutar)
- * - Komutlari E2EE ile sifreleyip gateway uzerinden ilgili cihaza yollar
- * - Sesli komut icin Web Speech API kullanir
+const GATEWAY_URL =
+    window.BELUGA_GATEWAY_URL ||
+    "https://belugasys.onrender.com";
+
+let authToken =
+    localStorage.getItem("beluga_auth_token");
+
+let currentUser = null;
+let devices = [];
+let activeDevice = null;
+let socket = null;
+
+const $ = (id) =>
+    document.getElementById(id);
+
+
+/*
+ * ---------------------------------------------------------
+ * AUTH
+ * ---------------------------------------------------------
  */
 
-const GATEWAY_URL = window.BELUGA_GATEWAY_URL || "https://belugasys.onrender.com";
-
-let socket = null;
-let devices = JSON.parse(localStorage.getItem("beluga_devices") || "[]");
-let activeDevice = null;
-let activeKey = null;
-
-const deviceListEl = document.getElementById("deviceList");
-const consoleLogEl = document.getElementById("consoleLog");
-const activeDeviceLabel = document.getElementById("activeDeviceLabel");
-const commandInput = document.getElementById("commandInput");
-const screenshotPreview = document.getElementById("screenshotPreview");
-
-function logLine(text, cls) {
-  const div = document.createElement("div");
-  div.className = `line ${cls}`;
-  div.textContent = text;
-  consoleLogEl.appendChild(div);
-  consoleLogEl.scrollTop = consoleLogEl.scrollHeight;
+function showAuthError(message) {
+    $("authError").textContent = message;
 }
 
-function saveDevices() {
-  localStorage.setItem("beluga_devices", JSON.stringify(devices));
+function saveAuth(token, user) {
+    authToken = token;
+
+    currentUser = user;
+
+    localStorage.setItem(
+        "beluga_auth_token",
+        token
+    );
+
+    localStorage.setItem(
+        "beluga_user",
+        JSON.stringify(user)
+    );
 }
 
-function renderDeviceList() {
-  deviceListEl.innerHTML = "";
-  devices.forEach((d) => {
-    const li = document.createElement("li");
-    li.className = d.serial === activeDevice?.serial ? "active" : "";
-    li.innerHTML = `<span>${d.name}</span><span class="status-dot ${d.online ? 'online' : ''}"></span>`;
-    li.onclick = () => selectDevice(d);
-    deviceListEl.appendChild(li);
-  });
+async function login() {
+
+    const username =
+        $("loginUsername").value.trim();
+
+    const password =
+        $("loginPassword").value;
+
+    if (!username || !password) {
+        showAuthError(
+            "Kullanıcı adı ve parola gerekli."
+        );
+        return;
+    }
+
+    try {
+
+        const response =
+            await fetch(
+                `${GATEWAY_URL}/api/auth/login`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+                    body: JSON.stringify({
+                        username,
+                        password
+                    })
+                }
+            );
+
+        const data =
+            await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                data.error ||
+                "Giriş başarısız."
+            );
+        }
+
+        saveAuth(
+            data.token,
+            data.user
+        );
+
+        openApplication();
+
+    } catch (error) {
+
+        showAuthError(
+            error.message
+        );
+    }
 }
 
-async function selectDevice(d) {
-  activeDevice = d;
-  activeKey = await deriveKey(d.pairing_secret);
-  activeDeviceLabel.textContent = `- ${d.name}`;
-  renderDeviceList();
-  socket.emit("device:register", { serial: d.serial, role: "dashboard" });
-  logLine(`[Sistem] '${d.name}' cihazi ile baglanti kuruldu.`, "from-system");
+
+async function register() {
+
+    const username =
+        $("registerUsername")
+            .value
+            .trim();
+
+    const password =
+        $("registerPassword")
+            .value;
+
+    const password2 =
+        $("registerPassword2")
+            .value;
+
+    if (!username || !password) {
+        showAuthError(
+            "Tüm alanları doldur."
+        );
+        return;
+    }
+
+    if (password !== password2) {
+        showAuthError(
+            "Parolalar aynı değil."
+        );
+        return;
+    }
+
+    try {
+
+        const response =
+            await fetch(
+                `${GATEWAY_URL}/api/auth/register`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+                    body: JSON.stringify({
+                        username,
+                        password
+                    })
+                }
+            );
+
+        const data =
+            await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                data.error ||
+                "Kayıt başarısız."
+            );
+        }
+
+        saveAuth(
+            data.token,
+            data.user
+        );
+
+        openApplication();
+
+    } catch (error) {
+
+        showAuthError(
+            error.message
+        );
+    }
 }
+
+
+async function logout() {
+
+    try {
+
+        await apiFetch(
+            "/api/auth/logout",
+            {
+                method: "POST"
+            }
+        );
+
+    } catch (_) {}
+
+    localStorage.removeItem(
+        "beluga_auth_token"
+    );
+
+    localStorage.removeItem(
+        "beluga_user"
+    );
+
+    authToken = null;
+    currentUser = null;
+
+    if (socket) {
+        socket.disconnect();
+        socket = null;
+    }
+
+    $("app").classList.add("hidden");
+    $("authScreen").classList.remove("hidden");
+}
+
+
+/*
+ * ---------------------------------------------------------
+ * API
+ * ---------------------------------------------------------
+ */
+
+async function apiFetch(
+    path,
+    options = {}
+) {
+
+    const headers = {
+        ...(options.headers || {})
+    };
+
+    if (authToken) {
+        headers.Authorization =
+            `Bearer ${authToken}`;
+    }
+
+    const response =
+        await fetch(
+            `${GATEWAY_URL}${path}`,
+            {
+                ...options,
+                headers
+            }
+        );
+
+    const data =
+        await response.json();
+
+    if (
+        response.status === 401
+    ) {
+        await logout();
+
+        throw new Error(
+            "Oturum sona erdi."
+        );
+    }
+
+    if (!response.ok) {
+        throw new Error(
+            data.error ||
+            "İstek başarısız."
+        );
+    }
+
+    return data;
+}
+
+
+/*
+ * ---------------------------------------------------------
+ * APP
+ * ---------------------------------------------------------
+ */
+
+function openApplication() {
+
+    $("authScreen")
+        .classList
+        .add("hidden");
+
+    $("app")
+        .classList
+        .remove("hidden");
+
+    $("usernameLabel")
+        .textContent =
+        currentUser.username;
+
+    $("settingsUsername")
+        .textContent =
+        currentUser.username;
+
+    loadDevices();
+
+    connectSocket();
+
+    checkGateway();
+}
+
+
+async function restoreSession() {
+
+    if (!authToken) {
+        return;
+    }
+
+    try {
+
+        const data =
+            await apiFetch(
+                "/api/auth/me"
+            );
+
+        currentUser =
+            data.user;
+
+        openApplication();
+
+    } catch (_) {}
+}
+
+
+/*
+ * ---------------------------------------------------------
+ * DEVICES
+ * ---------------------------------------------------------
+ */
+
+async function loadDevices() {
+
+    try {
+
+        const data =
+            await apiFetch(
+                "/api/devices"
+            );
+
+        devices =
+            data.devices || [];
+
+        renderDevices();
+
+        $("deviceCount")
+            .textContent =
+            devices.length;
+
+        if (
+            !activeDevice &&
+            devices.length > 0
+        ) {
+            selectDevice(
+                devices[0]
+            );
+        }
+
+    } catch (error) {
+
+        console.error(error);
+    }
+}
+
+
+function renderDevices() {
+
+    const container =
+        $("deviceList");
+
+    container.innerHTML = "";
+
+    for (const device of devices) {
+
+        const card =
+            document.createElement("div");
+
+        card.className =
+            "device-card";
+
+        card.innerHTML = `
+            <div class="device-icon">
+                PC
+            </div>
+
+            <div class="device-info">
+                <strong>
+                    ${escapeHtml(device.name)}
+                </strong>
+
+                <span>
+                    ${escapeHtml(device.serial)}
+                </span>
+
+                <small>
+                    ● Hazır
+                </small>
+            </div>
+        `;
+
+        card.onclick = () =>
+            selectDevice(device);
+
+        container.appendChild(card);
+    }
+}
+
+
+async function selectDevice(device) {
+
+    activeDevice = device;
+
+    $("activeDeviceLabel")
+        .textContent =
+        device.name;
+
+    if (
+        socket &&
+        socket.connected
+    ) {
+        socket.emit(
+            "device:register",
+            {
+                serial:
+                    device.serial,
+
+                role:
+                    "dashboard",
+
+                token:
+                    authToken
+            }
+        );
+    }
+
+    navigate("brain");
+}
+
+
+/*
+ * ---------------------------------------------------------
+ * SOCKET
+ * ---------------------------------------------------------
+ */
 
 function connectSocket() {
-  socket = io(GATEWAY_URL, { transports: ["websocket"] });
 
-  socket.on("connect", () => {
-    logLine("[Sistem] Gateway baglantisi kuruldu.", "from-system");
-    if (activeDevice) {
-      socket.emit("device:register", { serial: activeDevice.serial, role: "dashboard" });
+    socket =
+        io(
+            GATEWAY_URL,
+            {
+                transports:
+                    ["websocket"]
+            }
+        );
+
+    socket.on(
+        "connect",
+        () => {
+
+            $("gatewayStatus")
+                .textContent =
+                "● Gateway Online";
+
+            $("gatewayCard")
+                .textContent =
+                "ONLINE";
+
+            if (activeDevice) {
+
+                socket.emit(
+                    "device:register",
+                    {
+                        serial:
+                            activeDevice.serial,
+
+                        role:
+                            "dashboard",
+
+                        token:
+                            authToken
+                    }
+                );
+            }
+        }
+    );
+
+    socket.on(
+        "disconnect",
+        () => {
+
+            $("gatewayStatus")
+                .textContent =
+                "○ Gateway Offline";
+
+            $("gatewayCard")
+                .textContent =
+                "OFFLINE";
+        }
+    );
+
+    socket.on(
+        "device:registered",
+        (data) => {
+
+            if (!data.ok) {
+                addLog(
+                    `Beluga: ${data.error}`,
+                    "error"
+                );
+                return;
+            }
+
+            addLog(
+                "Beluga: cihaz bağlantısı hazır.",
+                "system"
+            );
+        }
+    );
+
+    socket.on(
+        "device:presence",
+        (data) => {
+
+            if (!data.serial) {
+                return;
+            }
+
+            addLog(
+                data.agentOnline
+                    ? "Beluga Agent online."
+                    : "Beluga Agent offline.",
+                "system"
+            );
+        }
+    );
+
+    socket.on(
+        "relay:message",
+        async ({ payload }) => {
+
+            addLog(
+                "Cihazdan yanıt alındı.",
+                "agent"
+            );
+        }
+    );
+}
+
+
+/*
+ * ---------------------------------------------------------
+ * COMMANDS
+ * ---------------------------------------------------------
+ */
+
+function sendCommand(
+    command,
+    params = {}
+) {
+
+    if (!activeDevice) {
+
+        addLog(
+            "Önce bir cihaz seç.",
+            "error"
+        );
+
+        return;
     }
-  });
 
-  socket.on("device:presence", ({ serial, agentOnline }) => {
-    const d = devices.find((x) => x.serial === serial);
-    if (d && typeof agentOnline === "boolean") {
-      d.online = agentOnline;
-      renderDeviceList();
+    if (
+        !socket ||
+        !socket.connected
+    ) {
+
+        addLog(
+            "Gateway bağlantısı yok.",
+            "error"
+        );
+
+        return;
     }
-  });
 
-  socket.on("relay:message", async ({ payload }) => {
-    if (!activeKey) return;
+    /*
+     * Burada mevcut E2EE sistemine
+     * bağlanacağız.
+     *
+     * Şimdilik mevcut relay formatını
+     * koruyoruz.
+     */
+
+    socket.emit(
+        "relay:message",
+        {
+            serial:
+                activeDevice.serial,
+
+            type:
+                "command",
+
+            payload:
+                JSON.stringify({
+                    command,
+                    params,
+                    request_id:
+                        crypto.randomUUID()
+                })
+        }
+    );
+
+    addLog(
+        `Komut: ${command}`,
+        "user"
+    );
+}
+
+
+/*
+ * ---------------------------------------------------------
+ * BRAIN
+ * ---------------------------------------------------------
+ */
+
+function sendBrainCommand() {
+
+    const text =
+        $("commandInput")
+            .value
+            .trim();
+
+    if (!text) {
+        return;
+    }
+
+    /*
+     * Brain backend'e geçtiğimizde
+     * burası doğrudan AI endpointine
+     * gidecek.
+     */
+
+    addLog(
+        `Siz: ${text}`,
+        "user"
+    );
+
+    addLog(
+        "Beluga Brain isteği analiz ediyor...",
+        "system"
+    );
+
+    $("commandInput")
+        .value = "";
+}
+
+
+/*
+ * ---------------------------------------------------------
+ * UI
+ * ---------------------------------------------------------
+ */
+
+function navigate(page) {
+
+    document
+        .querySelectorAll(".page")
+        .forEach(
+            (element) => {
+                element.classList.remove(
+                    "active"
+                );
+            }
+        );
+
+    const target =
+        $(`${page}Page`);
+
+    if (target) {
+        target.classList.add(
+            "active"
+        );
+    }
+
+    document
+        .querySelectorAll(".nav-item")
+        .forEach(
+            (button) => {
+
+                button.classList.toggle(
+                    "active",
+                    button.dataset.page === page
+                );
+
+            }
+        );
+}
+
+
+function addLog(
+    text,
+    type = "system"
+) {
+
+    const consoleEl =
+        $("consoleLog");
+
+    const line =
+        document.createElement("div");
+
+    line.className =
+        `console-line ${type}`;
+
+    line.textContent =
+        text;
+
+    consoleEl.appendChild(
+        line
+    );
+
+    consoleEl.scrollTop =
+        consoleEl.scrollHeight;
+}
+
+
+function escapeHtml(text) {
+
+    return String(text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+
+/*
+ * ---------------------------------------------------------
+ * GATEWAY
+ * ---------------------------------------------------------
+ */
+
+async function checkGateway() {
+
     try {
-      const data = await decryptPayload(activeKey, payload);
-      handleAgentResult(data);
-    } catch (e) {
-      logLine("[Sistem] Sifre cozme hatasi: gelen paket dogrulanamadi.", "from-system");
+
+        const response =
+            await fetch(
+                `${GATEWAY_URL}/health`
+            );
+
+        const data =
+            await response.json();
+
+        $("gatewayStatus")
+            .textContent =
+            data.database
+                ? "● Gateway + Database Online"
+                : "● Gateway Online";
+
+        $("gatewayCard")
+            .textContent =
+            data.database
+                ? "ONLINE"
+                : "NO DATABASE";
+
+    } catch (_) {
+
+        $("gatewayStatus")
+            .textContent =
+            "○ Gateway Offline";
+
+        $("gatewayCard")
+            .textContent =
+            "OFFLINE";
     }
-  });
 }
 
-function handleAgentResult(data) {
-  const { command, result } = data;
-  if (!result?.ok) {
-    logLine(`[Ajan] Hata (${command}): ${result?.error || "bilinmiyor"}`, "from-agent");
-    return;
-  }
 
-  if (command === "screenshot") {
-    screenshotPreview.src = `data:image/jpeg;base64,${result.data.image_base64}`;
-    screenshotPreview.classList.add("visible");
-    logLine("[Ajan] Ekran goruntusu alindi.", "from-agent");
-    return;
-  }
+/*
+ * ---------------------------------------------------------
+ * EVENTS
+ * ---------------------------------------------------------
+ */
 
-  if (command === "system_status") {
-    logLine(`[Ajan] Durum: CPU %${result.data.cpu_percent} | RAM %${result.data.ram_percent} | Disk %${result.data.disk_percent}`, "from-agent");
-    return;
-  }
+$("loginBtn")
+    .onclick =
+    login;
 
-  logLine(`[Ajan] '${command}' calistirildi.`, "from-agent");
-}
+$("registerBtn")
+    .onclick =
+    register;
 
-async function sendCommand(command, params = {}) {
-  if (!activeDevice || !activeKey) {
-    logLine("[Sistem] Once bir cihaz secin.", "from-system");
-    return;
-  }
-  const requestId = crypto.randomUUID();
-  const encrypted = await encryptPayload(activeKey, { command, params, request_id: requestId });
-  socket.emit("relay:message", { serial: activeDevice.serial, type: "command", payload: encrypted });
-  logLine(`[Siz] ${command} ${JSON.stringify(params)}`, "from-user");
-}
+$("logoutBtn")
+    .onclick =
+    logout;
 
-// -------------------- basit dogal dil -> komut esleme --------------------
-function parseNaturalLanguageCommand(text) {
-  const t = text.toLowerCase();
-  if (t.includes("ekran") && t.includes("goster") || t.includes("screenshot")) return { command: "screenshot", params: {} };
-  if (t.includes("durum")) return { command: "system_status", params: {} };
-  if (t.includes("kilitle")) return { command: "lock_screen", params: {} };
-  return null;
-}
+$("showRegisterBtn")
+    .onclick =
+    () => {
 
-document.getElementById("sendBtn").onclick = () => {
-  const text = commandInput.value.trim();
-  if (!text) return;
-  const parsed = parseNaturalLanguageCommand(text);
-  if (parsed) sendCommand(parsed.command, parsed.params);
-  else logLine("[Sistem] Komut anlasilamadi. Hizli eylem butonlarini deneyebilirsiniz.", "from-system");
-  commandInput.value = "";
-};
+        $("loginBox")
+            .classList
+            .add("hidden");
 
-document.querySelectorAll(".quick-actions button").forEach((btn) => {
-  btn.onclick = () => sendCommand(btn.dataset.cmd, {});
-});
+        $("registerBox")
+            .classList
+            .remove("hidden");
 
-// -------------------- sesli komut (Web Speech API) --------------------
-const micBtn = document.getElementById("micBtn");
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-if (SpeechRecognition) {
-  const recognizer = new SpeechRecognition();
-  recognizer.lang = "tr-TR";
-  recognizer.onresult = (e) => {
-    const text = e.results[0][0].transcript;
-    commandInput.value = text;
-    document.getElementById("sendBtn").click();
-  };
-  micBtn.onclick = () => recognizer.start();
-} else {
-  micBtn.disabled = true;
-  micBtn.title = "Bu tarayici sesli komutu desteklemiyor";
-}
+        showAuthError("");
+    };
 
-// -------------------- cihaz eslestirme (QR) --------------------
-const modal = document.getElementById("pairingModal");
-document.getElementById("addDeviceBtn").onclick = () => modal.classList.remove("hidden");
-document.getElementById("closePairingBtn").onclick = () => modal.classList.add("hidden");
+$("showLoginBtn")
+    .onclick =
+    () => {
 
-document.getElementById("generatePairBtn").onclick = async () => {
-  const name = document.getElementById("pairDeviceName").value.trim();
-  const serial = document.getElementById("pairSerial").value.trim();
-  const secret = document.getElementById("pairSecret").value;
-  if (!name || !serial || !secret) {
-    alert("Tum alanlari doldurun.");
-    return;
-  }
+        $("registerBox")
+            .classList
+            .add("hidden");
 
-  const res = await fetch(`${GATEWAY_URL}/api/pairing/init`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ serial }),
-  });
-  const { token } = await res.json();
+        $("loginBox")
+            .classList
+            .remove("hidden");
 
-  const container = document.getElementById("qrCodeContainer");
-  container.innerHTML = `<div style="text-align:left; font-family:monospace; font-size:13px; background:#0a1220; padding:12px; border-radius:6px; user-select:all; word-break:break-all;">
-    <b>pairing_token:</b><br/>${token}<br/><br/>
-    <b>device_serial:</b><br/>${serial}<br/><br/>
-    <b>pairing_secret:</b><br/>${secret}
-  </div>`;
+        showAuthError("");
+    };
 
-  devices.push({ serial, name, pairing_secret: secret, online: false });
-  saveDevices();
-  renderDeviceList();
-};
 
-// -------------------- baslangic --------------------
-connectSocket();
-renderDeviceList();
-if (devices[0]) selectDevice(devices[0]);
+$("sendBtn")
+    .onclick =
+    sendBrainCommand;
+
+$("commandInput")
+    .addEventListener(
+        "keydown",
+        (event) => {
+
+            if (
+                event.key === "Enter"
+            ) {
+                sendBrainCommand();
+            }
+        }
+    );
+
+
+$("openBrainBtn")
+    .onclick =
+    () => navigate("brain");
+
+
+document
+    .querySelectorAll(".nav-item")
+    .forEach(
+        (button) => {
+
+            button.onclick =
+                () => navigate(
+                    button.dataset.page
+                );
+
+        }
+    );
+
+
+$("addDeviceBtn")
+    .onclick =
+    () => {
+
+        $("deviceModal")
+            .classList
+            .remove("hidden");
+    };
+
+
+$("closeDeviceBtn")
+    .onclick =
+    () => {
+
+        $("deviceModal")
+            .classList
+            .add("hidden");
+    };
+
+
+$("saveDeviceBtn")
+    .onclick =
+    async () => {
+
+        const name =
+            $("deviceName")
+                .value
+                .trim();
+
+        const serial =
+            $("deviceSerial")
+                .value
+                .trim();
+
+        const secret =
+            $("deviceSecret")
+                .value;
+
+        if (
+            !name ||
+            !serial ||
+            !secret
+        ) {
+            alert(
+                "Tüm alanları doldur."
+            );
+            return;
+        }
+
+        try {
+
+            await apiFetch(
+                "/api/devices",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+                    body:
+                        JSON.stringify({
+                            name,
+                            serial,
+                            pairing_secret:
+                                secret
+                        })
+                }
+            );
+
+            $("deviceModal")
+                .classList
+                .add("hidden");
+
+            await loadDevices();
+
+        } catch (error) {
+
+            alert(
+                error.message
+            );
+        }
+    };
+
+
+/*
+ * ---------------------------------------------------------
+ * START
+ * ---------------------------------------------------------
+ */
+
+restoreSession();
