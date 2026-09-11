@@ -8,7 +8,7 @@
  * - Sesli komut icin Web Speech API kullanir
  */
 
-const GATEWAY_URL = window.BELUGA_GATEWAY_URL || "https://belugasys.onrender.com";
+const GATEWAY_URL = window.BELUGA_GATEWAY_URL || "https://beluga-gateway.onrender.com";
 
 let socket = null;
 let devices = JSON.parse(localStorage.getItem("beluga_devices") || "[]");
@@ -175,12 +175,12 @@ document.getElementById("generatePairBtn").onclick = async () => {
   });
   const { token } = await res.json();
 
-  const qrPayload = JSON.stringify({ serial, pairing_token: token, pairing_secret: secret, gateway_url: GATEWAY_URL });
   const container = document.getElementById("qrCodeContainer");
-  container.innerHTML = "";
-  const canvas = document.createElement("canvas");
-  container.appendChild(canvas);
-  QRCode.toCanvas(canvas, qrPayload, { width: 220 });
+  container.innerHTML = `<div style="text-align:left; font-family:monospace; font-size:13px; background:#0a1220; padding:12px; border-radius:6px; user-select:all; word-break:break-all;">
+    <b>pairing_token:</b><br/>${token}<br/><br/>
+    <b>device_serial:</b><br/>${serial}<br/><br/>
+    <b>pairing_secret:</b><br/>${secret}
+  </div>`;
 
   devices.push({ serial, name, pairing_secret: secret, online: false });
   saveDevices();
