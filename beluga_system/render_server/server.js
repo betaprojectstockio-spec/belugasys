@@ -49,6 +49,7 @@ if (!process.env.DATABASE_URL) {
     console.error(
         "[BELUGA] DATABASE_URL tanimli degil."
     );
+
     process.exit(1);
 }
 
@@ -66,6 +67,14 @@ const pool = new Pool({
 
 
 async function initDatabase() {
+
+    /*
+     * ANA TABLOLAR
+     *
+     * CREATE TABLE IF NOT EXISTS mevcut tabloyu
+     * degistirmez. Bu nedenle asagida migration
+     * adimi da calistiriyoruz.
+     */
 
     await pool.query(`
         CREATE TABLE IF NOT EXISTS users (
@@ -91,9 +100,9 @@ async function initDatabase() {
 
             serial TEXT NOT NULL,
 
-            name TEXT NOT NULL,
+            name TEXT,
 
-            pairing_secret_hash TEXT NOT NULL,
+            pairing_secret_hash TEXT,
 
             created_at TIMESTAMPTZ DEFAULT NOW(),
 
@@ -101,18 +110,72 @@ async function initDatabase() {
 
             UNIQUE(user_id, serial)
         );
+    `);
 
+
+    /*
+     * =====================================================
+     * DATABASE MIGRATION
+     * =====================================================
+     *
+     * Eski devices tablosunda bu kolonlar olmayabilir.
+     * IF NOT EXISTS sayesinde mevcut veriler silinmez.
+     */
+
+    await pool.query(`
+        ALTER TABLE devices
+        ADD COLUMN IF NOT EXISTS
+        pairing_secret_hash TEXT;
+    `);
+
+    await pool.query(`
+        ALTER TABLE devices
+        ADD COLUMN IF NOT EXISTS
+        name TEXT;
+    `);
+
+    await pool.query(`
+        ALTER TABLE devices
+        ADD COLUMN IF NOT EXISTS
+        created_at TIMESTAMPTZ DEFAULT NOW();
+    `);
+
+    await pool.query(`
+        ALTER TABLE devices
+        ADD COLUMN IF NOT EXISTS
+        last_seen TIMESTAMPTZ;
+    `);
+
+
+    /*
+     * Eski kayitlarda name NULL ise bos isim kullanilabilir.
+     * Burada mevcut verileri silmiyoruz.
+     */
+
+
+    /*
+     * INDEXLER
+     */
+
+    await pool.query(`
         CREATE INDEX IF NOT EXISTS
             sessions_user_idx
         ON sessions(user_id);
+    `);
 
+    await pool.query(`
         CREATE INDEX IF NOT EXISTS
             devices_user_idx
         ON devices(user_id);
     `);
 
+
     console.log(
         "[BELUGA] PostgreSQL database hazir."
+    );
+
+    console.log(
+        "[BELUGA] Database migration kontrolu tamamlandi."
     );
 }
 
@@ -168,6 +231,13 @@ function verifyPassword(
 
     return new Promise(
         (resolve, reject) => {
+
+            if (
+                typeof stored !== "string"
+            ) {
+                resolve(false);
+                return;
+            }
 
             const parts =
                 stored.split(":");
@@ -400,8 +470,7 @@ app.post(
                 );
 
             if (
-                existing.rows.length
-                > 0
+                existing.rows.length > 0
             ) {
                 return res.status(409)
                     .json({
@@ -601,6 +670,11 @@ app.get(
 
         } catch (error) {
 
+            console.error(
+                "[ME ERROR]",
+                error
+            );
+
             res.status(500)
                 .json({
                     error:
@@ -642,6 +716,11 @@ app.post(
             });
 
         } catch (error) {
+
+            console.error(
+                "[LOGOUT ERROR]",
+                error
+            );
 
             res.status(500)
                 .json({
@@ -750,8 +829,7 @@ app.post(
 
             const secret =
                 String(
-                    req.body?.pairing_secret
-                    || ""
+                    req.body?.pairing_secret || ""
                 );
 
             if (
@@ -818,8 +896,7 @@ app.post(
             );
 
             if (
-                error.code ===
-                "23505"
+                error.code === "23505"
             ) {
                 return res.status(409)
                     .json({
@@ -956,10 +1033,15 @@ io.on(
                             data.role || ""
                         ).trim();
 
+                    /*
+                     * Agent pairing_secret'i token
+                     * alaninda gonderiyor.
+                     */
                     const token =
                         String(
                             data.token || ""
                         );
+
 
                     if (
                         !serial ||
@@ -980,11 +1062,12 @@ io.on(
                     }
 
 
-                    /* DASHBOARD */
+                    /* ---------------------------------
+                       DASHBOARD
+                    --------------------------------- */
 
                     if (
-                        role ===
-                        "dashboard"
+                        role === "dashboard"
                     ) {
 
                         const user =
@@ -1022,7 +1105,6 @@ io.on(
                             "device:registered",
                             {
                                 ok: true,
-
                                 serial,
                             }
                         );
@@ -1031,7 +1113,9 @@ io.on(
                     }
 
 
-                    /* AGENT */
+                    /* ---------------------------------
+                       AGENT
+                    --------------------------------- */
 
                     if (
                         role === "agent"
@@ -1086,7 +1170,6 @@ io.on(
                             "device:registered",
                             {
                                 ok: true,
-
                                 serial,
                             }
                         );
@@ -1097,14 +1180,23 @@ io.on(
                             "device:presence",
                             {
                                 serial,
-
-                                agentOnline:
-                                    true,
+                                agentOnline: true,
                             }
                         );
 
                         return;
                     }
+
+
+                    socket.emit(
+                        "device:registered",
+                        {
+                            ok: false,
+
+                            error:
+                                "Gecersiz cihaz rolu.",
+                        }
+                    );
 
                 } catch (error) {
 
@@ -1129,8 +1221,6 @@ io.on(
 
         /* ---------------------------------------------
            ENCRYPTED RELAY
-
-           Gateway payload'a DOKUNMUYOR.
         --------------------------------------------- */
 
         socket.on(
@@ -1182,8 +1272,7 @@ io.on(
             () => {
 
                 if (
-                    socketRole ===
-                        "agent" &&
+                    socketRole === "agent" &&
                     boundSerial
                 ) {
 
@@ -1193,8 +1282,7 @@ io.on(
                         );
 
                     if (
-                        current ===
-                        socket.id
+                        current === socket.id
                     ) {
 
                         connectedAgents.delete(
