@@ -1,0 +1,7 @@
+{
+  "name": "beluga-system",
+  "private": true,
+  "version": "1.0.0",
+  "description": "B.E.L.U.G.A - Kisisel Otomasyon ve Asistanlik Sistemi (monorepo kok dosyasi)",
+  "workspaces": ["render_server"]
+}

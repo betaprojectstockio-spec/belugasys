@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: beluga-gateway
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: ALLOWED_ORIGINS
+        value: "*"
+      - key: HEARTBEAT_INTERVAL_MS
+        value: "240000"
+      - key: PAIRING_TTL_SECONDS
+        value: "300"

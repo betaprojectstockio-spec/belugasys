@@ -1,0 +1,17 @@
+{
+  "device_serial": "BELUGA-dukkan-PC-0001",
+  "device_name": "Dükkan PC",
+  "gateway_url": "https://beluga-gateway.onrender.com",
+  "pairing_token": "",
+  "pairing_secret": "PANELDEKI_QR_ILE_AYNI_PAYLASILAN_PAROLA",
+  "allowed_commands": [
+    "system_status",
+    "screenshot",
+    "mouse_move",
+    "mouse_click",
+    "type_text",
+    "key_press",
+    "open_app",
+    "lock_screen"
+  ]
+}

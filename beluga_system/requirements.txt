@@ -1,0 +1,2 @@
+# Kok dizin -- local_agent/requirements.txt dosyasina yonlendirme icindir.
+-r local_agent/requirements.txt
