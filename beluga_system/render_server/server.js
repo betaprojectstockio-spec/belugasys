@@ -68,14 +68,6 @@ const pool = new Pool({
 
 async function initDatabase() {
 
-    /*
-     * ANA TABLOLAR
-     *
-     * CREATE TABLE IF NOT EXISTS mevcut tabloyu
-     * degistirmez. Bu nedenle asagida migration
-     * adimi da calistiriyoruz.
-     */
-
     await pool.query(`
         CREATE TABLE IF NOT EXISTS users (
             id UUID PRIMARY KEY,
@@ -94,6 +86,7 @@ async function initDatabase() {
 
         CREATE TABLE IF NOT EXISTS devices (
             id UUID PRIMARY KEY,
+
             user_id UUID NOT NULL
                 REFERENCES users(id)
                 ON DELETE CASCADE,
@@ -101,6 +94,8 @@ async function initDatabase() {
             serial TEXT NOT NULL,
 
             name TEXT,
+
+            pairing_secret TEXT,
 
             pairing_secret_hash TEXT,
 
@@ -114,13 +109,14 @@ async function initDatabase() {
 
 
     /*
-     * =====================================================
      * DATABASE MIGRATION
-     * =====================================================
-     *
-     * Eski devices tablosunda bu kolonlar olmayabilir.
-     * IF NOT EXISTS sayesinde mevcut veriler silinmez.
      */
+
+    await pool.query(`
+        ALTER TABLE devices
+        ADD COLUMN IF NOT EXISTS
+        pairing_secret TEXT;
+    `);
 
     await pool.query(`
         ALTER TABLE devices
@@ -145,12 +141,6 @@ async function initDatabase() {
         ADD COLUMN IF NOT EXISTS
         last_seen TIMESTAMPTZ;
     `);
-
-
-    /*
-     * Eski kayitlarda name NULL ise bos isim kullanilabilir.
-     * Burada mevcut verileri silmiyoruz.
-     */
 
 
     /*
@@ -817,6 +807,7 @@ app.post(
                     });
             }
 
+
             const name =
                 String(
                     req.body?.name || ""
@@ -827,34 +818,52 @@ app.post(
                     req.body?.serial || ""
                 ).trim();
 
+
+            if (!name || !serial) {
+                return res.status(400)
+                    .json({
+                        error:
+                            "Cihaz adi ve seri numarasi gerekli.",
+                    });
+            }
+
+
+            /*
+             * Pairing secret kullanici tarafindan
+             * verilmediyse otomatik olusturulur.
+             */
+
             let secret =
-    String(
-        req.body?.pairing_secret || ""
-    ).trim();
+                String(
+                    req.body?.pairing_secret || ""
+                ).trim();
 
-if (!secret) {
-    secret =
-        crypto
-            .randomBytes(32)
-            .toString("base64url");
-}
 
-if (
-    !name ||
-    !serial
-) {
-    return res.status(400)
-        .json({
-            error:
-                "Cihaz adı ve seri numarası gerekli.",
-        });
-}
+            if (!secret) {
+
+                secret =
+                    crypto
+                        .randomBytes(32)
+                        .toString("base64url");
+            }
+
+
+            /*
+             * Secret'in hash'i agent dogrulamasi
+             * icin kullanilir.
+             */
+
+            const secretHash =
+                hashSecret(secret);
+
 
             const deviceId =
                 crypto.randomUUID();
 
-            const secretHash =
-                hashSecret(secret);
+
+            /*
+             * Cihaz kaydi.
+             */
 
             await pool.query(
                 `
@@ -864,6 +873,7 @@ if (
                     user_id,
                     serial,
                     name,
+                    pairing_secret,
                     pairing_secret_hash
                 )
                 VALUES
@@ -872,7 +882,8 @@ if (
                     $2,
                     $3,
                     $4,
-                    $5
+                    $5,
+                    $6
                 )
                 `,
                 [
@@ -880,20 +891,37 @@ if (
                     user.id,
                     serial,
                     name,
+                    secret,
                     secretHash,
                 ]
             );
 
-            res.json({
+
+            /*
+             * Secret dashboard'a geri gonderilir.
+             */
+
+            return res.json({
                 ok: true,
 
                 device: {
-    id: deviceId,
-    serial,
-    name,
-    pairing_secret: secret,
-},
+                    id:
+                        deviceId,
+
+                    serial:
+                        serial,
+
+                    name:
+                        name,
+
+                    pairing_secret:
+                        secret,
+                },
+
+                pairing_secret:
+                    secret,
             });
+
 
         } catch (error) {
 
@@ -902,9 +930,15 @@ if (
                 error
             );
 
+
+            /*
+             * UNIQUE violation
+             */
+
             if (
                 error.code === "23505"
             ) {
+
                 return res.status(409)
                     .json({
                         error:
@@ -912,7 +946,27 @@ if (
                     });
             }
 
-            res.status(500)
+
+            /*
+             * NOT NULL violation
+             */
+
+            if (
+                error.code === "23502"
+            ) {
+
+                return res.status(500)
+                    .json({
+                        error:
+                            `Veritabani zorunlu alani eksik: ${
+                                error.column ||
+                                "bilinmeyen alan"
+                            }`,
+                    });
+            }
+
+
+            return res.status(500)
                 .json({
                     error:
                         "Cihaz eklenemedi.",
@@ -1041,9 +1095,10 @@ io.on(
                         ).trim();
 
                     /*
-                     * Agent pairing_secret'i token
+                     * Agent pairing secret'i token
                      * alaninda gonderiyor.
                      */
+
                     const token =
                         String(
                             data.token || ""
@@ -1164,6 +1219,7 @@ io.on(
                             `device:${serial}`
                         );
 
+
                         await pool.query(
                             `
                             UPDATE devices
@@ -1173,6 +1229,7 @@ io.on(
                             [serial]
                         );
 
+
                         socket.emit(
                             "device:registered",
                             {
@@ -1180,6 +1237,7 @@ io.on(
                                 serial,
                             }
                         );
+
 
                         io.to(
                             `device:${serial}`
