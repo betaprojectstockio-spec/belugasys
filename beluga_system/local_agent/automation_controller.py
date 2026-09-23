@@ -1,63 +1,211 @@
-"""
-Otomasyon Kontrolcusu
-------------------------
-PyAutoGUI ve isletim sistemi API'leri uzerinden calisan, KOMUT
-BEYAZ LISTESI (allowlist) ile sinirlandirilmis eylemleri yurutur.
-Yalnizca config.json icindeki 'allowed_commands' listesinde yer alan
-komutlar calistirilir; tanimsiz/izinsiz komutlar reddedilir.
-"""
-
 import os
 import platform
 import subprocess
 import pyautogui
 
+from private_system import enter_private_system, exit_private_system
+
+
 pyautogui.FAILSAFE = True
 
 
-def run_command(command: str, params: dict, allowed_commands: list) -> dict:
+def run_command(command, params=None, allowed_commands=None):
+    """
+    BelugaSys local command executor.
+
+    Safe system commands:
+      - privatesystem
+      - onsystemlight
+
+    Other commands are executed only when explicitly allowed.
+    """
+
+    params = params or {}
+    allowed_commands = allowed_commands or []
+
+    # ---------------------------------------------------------
+    # BELUGA PRIVATE SYSTEM
+    # ---------------------------------------------------------
+
+    if command == "privatesystem":
+        return enter_private_system()
+
+    if command == "onsystemlight":
+        return exit_private_system()
+
+    # ---------------------------------------------------------
+    # GENERAL COMMAND AUTHORIZATION
+    # ---------------------------------------------------------
+
     if command not in allowed_commands:
-        return {"ok": False, "error": f"'{command}' izin verilen komutlar listesinde degil"}
+        return {
+            "ok": False,
+            "error": "Command not allowed",
+            "command": command
+        }
 
-    try:
-        if command == "mouse_move":
-            pyautogui.moveTo(params.get("x", 0), params.get("y", 0), duration=params.get("duration", 0.2))
-            return {"ok": True}
+    # ---------------------------------------------------------
+    # MOUSE
+    # ---------------------------------------------------------
 
-        if command == "mouse_click":
-            pyautogui.click(params.get("x"), params.get("y"), button=params.get("button", "left"))
-            return {"ok": True}
+    if command == "mouse_move":
+        x = int(params.get("x", 0))
+        y = int(params.get("y", 0))
 
-        if command == "type_text":
-            pyautogui.write(params.get("text", ""), interval=0.02)
-            return {"ok": True}
+        pyautogui.moveTo(x, y)
 
-        if command == "key_press":
-            keys = params.get("keys", [])
-            if isinstance(keys, list) and len(keys) > 1:
-                pyautogui.hotkey(*keys)
-            elif keys:
-                pyautogui.press(keys if isinstance(keys, str) else keys[0])
-            return {"ok": True}
+        return {
+            "ok": True,
+            "command": command,
+            "x": x,
+            "y": y
+        }
 
-        if command == "open_app":
-            app_path = params.get("path")
-            if not app_path:
-                return {"ok": False, "error": "path gerekli"}
-            subprocess.Popen([app_path], shell=False)
-            return {"ok": True}
+    if command == "mouse_click":
+        button = params.get("button", "left")
 
-        if command == "lock_screen":
-            system = platform.system()
-            if system == "Windows":
-                os.system("rundll32.exe user32.dll,LockWorkStation")
-            elif system == "Darwin":
-                os.system("pmset displaysleepnow")
+        if button not in ("left", "right", "middle"):
+            return {
+                "ok": False,
+                "error": "Invalid mouse button"
+            }
+
+        pyautogui.click(button=button)
+
+        return {
+            "ok": True,
+            "command": command,
+            "button": button
+        }
+
+    # ---------------------------------------------------------
+    # KEYBOARD
+    # ---------------------------------------------------------
+
+    if command == "type_text":
+        text = str(params.get("text", ""))
+
+        pyautogui.write(text, interval=0.01)
+
+        return {
+            "ok": True,
+            "command": command
+        }
+
+    if command == "key_press":
+        key = str(params.get("key", ""))
+
+        if not key:
+            return {
+                "ok": False,
+                "error": "No key specified"
+            }
+
+        pyautogui.press(key)
+
+        return {
+            "ok": True,
+            "command": command,
+            "key": key
+        }
+
+    # ---------------------------------------------------------
+    # APPLICATION
+    # ---------------------------------------------------------
+
+    if command == "open_app":
+        app = str(params.get("app", "")).strip()
+
+        if not app:
+            return {
+                "ok": False,
+                "error": "No application specified"
+            }
+
+        try:
+            if platform.system() == "Windows":
+                subprocess.Popen(app, shell=True)
+
+            elif platform.system() == "Linux":
+                subprocess.Popen(app.split())
+
+            elif platform.system() == "Darwin":
+                subprocess.Popen(["open", "-a", app])
+
             else:
-                os.system("loginctl lock-session")
-            return {"ok": True}
+                return {
+                    "ok": False,
+                    "error": "Unsupported operating system"
+                }
 
-        return {"ok": False, "error": "bilinmeyen komut"}
+            return {
+                "ok": True,
+                "command": command,
+                "app": app
+            }
 
-    except Exception as exc:  # noqa: BLE001
-        return {"ok": False, "error": str(exc)}
+        except Exception as exc:
+            return {
+                "ok": False,
+                "error": str(exc)
+            }
+
+    # ---------------------------------------------------------
+    # LOCK SCREEN
+    # ---------------------------------------------------------
+
+    if command == "lock_screen":
+
+        system = platform.system()
+
+        try:
+            if system == "Windows":
+                subprocess.run(
+                    [
+                        "rundll32.exe",
+                        "user32.dll,LockWorkStation"
+                    ],
+                    check=False
+                )
+
+            elif system == "Linux":
+                subprocess.run(
+                    ["loginctl", "lock-session"],
+                    check=False
+                )
+
+            elif system == "Darwin":
+                subprocess.run(
+                    [
+                        "/System/Library/CoreServices/Menu Extras/User.menu/Contents/Resources/CGSession",
+                        "-suspend"
+                    ],
+                    check=False
+                )
+
+            else:
+                return {
+                    "ok": False,
+                    "error": "Unsupported operating system"
+                }
+
+            return {
+                "ok": True,
+                "command": command
+            }
+
+        except Exception as exc:
+            return {
+                "ok": False,
+                "error": str(exc)
+            }
+
+    # ---------------------------------------------------------
+    # UNKNOWN COMMAND
+    # ---------------------------------------------------------
+
+    return {
+        "ok": False,
+        "error": "Unknown command",
+        "command": command
+    }
