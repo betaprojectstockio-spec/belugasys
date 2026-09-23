@@ -741,113 +741,273 @@ function handleAgentResponse(data) {
         const result = data.result;
 
         /*
-         * -----------------------------------------
-         * SCREENSHOT
-         * -----------------------------------------
-         */
+ * ---------------------------------------------------------
+ * SCREENSHOT
+ * ---------------------------------------------------------
+ */
 
-        if (
-            result.data &&
-            result.data.image_base64
-        ) {
+function showScreenshot(base64) {
 
-            showScreenshot(
-                result.data.image_base64
-            );
+    const consoleEl = $("consoleLog");
 
-            return;
-        }
-
-
-        /*
-         * -----------------------------------------
-         * SYSTEM STATUS
-         * -----------------------------------------
-         */
-
-        if (
-            result.data &&
-            (
-                "cpu_percent" in result.data ||
-                "ram_percent" in result.data ||
-                "disk_percent" in result.data
-            )
-        ) {
-
-            showSystemStatus(
-                result.data
-            );
-
-            return;
-        }
-
-
-        /*
-         * Normal string sonuç
-         */
-
-        if (
-            typeof result === "string"
-        ) {
-
-            addLog(
-                `Beluga: ${result}`,
-                "agent"
-            );
-
-            return;
-        }
-
-
-        /*
-         * Genel başarı mesajı
-         */
-
-        if (result.ok === true) {
-
-            addLog(
-                "Beluga: İşlem başarıyla tamamlandı.",
-                "agent"
-            );
-
-            return;
-        }
-
-
-        /*
-         * Bilinmeyen ama küçük JSON sonuçları
-         */
-
-        addLog(
-            `Beluga: ${formatSimpleResult(result)}`,
-            "agent"
-        );
-
+    if (!consoleEl) {
         return;
     }
 
+    const wrapper = document.createElement("div");
+
+    wrapper.className =
+        "console-line agent screenshot-result";
+
+    const title = document.createElement("div");
+
+    title.textContent =
+        "Beluga • Ekran Görüntüsü";
+
+    title.style.fontWeight = "700";
+    title.style.marginBottom = "10px";
+
+    const image = document.createElement("img");
 
     /*
-     * Direkt response
+     * Agent JPEG gönderiyor.
      */
+    image.src =
+        `data:image/jpeg;base64,${base64}`;
 
-    if (
-        typeof data === "string"
-    ) {
+    image.alt =
+        "Beluga ekran görüntüsü";
 
-        addLog(
-            `Beluga: ${data}`,
-            "agent"
-        );
+    image.style.display = "block";
+    image.style.maxWidth = "100%";
+    image.style.width = "min(900px, 100%)";
+    image.style.height = "auto";
+    image.style.borderRadius = "14px";
+    image.style.cursor = "pointer";
 
+    image.title =
+        "Büyütmek için tıkla";
+
+    image.onclick = () => {
+
+        const newWindow =
+            window.open();
+
+        if (newWindow) {
+
+            newWindow.document.write(`
+                <html>
+                <head>
+                    <title>Beluga Screenshot</title>
+                    <style>
+                        body {
+                            margin: 0;
+                            background: #111;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            min-height: 100vh;
+                        }
+
+                        img {
+                            max-width: 100%;
+                            max-height: 100vh;
+                            object-fit: contain;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <img src="${image.src}">
+                </body>
+                </html>
+            `);
+        }
+    };
+
+    wrapper.appendChild(title);
+    wrapper.appendChild(image);
+
+    consoleEl.appendChild(wrapper);
+
+    consoleEl.scrollTop =
+        consoleEl.scrollHeight;
+}
+
+
+/*
+ * ---------------------------------------------------------
+ * SYSTEM STATUS
+ * ---------------------------------------------------------
+ */
+
+function showSystemStatus(status) {
+
+    const consoleEl = $("consoleLog");
+
+    if (!consoleEl) {
         return;
     }
 
+    const card =
+        document.createElement("div");
 
-    addLog(
-        "Beluga: İşlem tamamlandı.",
-        "agent"
+    card.className =
+        "system-status-result";
+
+    card.style.padding = "16px";
+    card.style.marginTop = "10px";
+    card.style.borderRadius = "14px";
+    card.style.background =
+        "rgba(255,255,255,0.05)";
+
+
+    const title =
+        document.createElement("div");
+
+    title.textContent =
+        "Beluga • Sistem Durumu";
+
+    title.style.fontSize = "18px";
+    title.style.fontWeight = "700";
+    title.style.marginBottom = "14px";
+
+
+    const grid =
+        document.createElement("div");
+
+    grid.style.display = "grid";
+
+    grid.style.gridTemplateColumns =
+        "repeat(auto-fit, minmax(150px, 1fr))";
+
+    grid.style.gap = "10px";
+
+
+    addStatusItem(
+        grid,
+        "CPU",
+        `${status.cpu_percent ?? 0}%`
     );
+
+    addStatusItem(
+        grid,
+        "RAM",
+        `${status.ram_percent ?? 0}%`
+    );
+
+    addStatusItem(
+        grid,
+        "Disk",
+        `${status.disk_percent ?? 0}%`
+    );
+
+
+    addStatusItem(
+        grid,
+        "İşletim Sistemi",
+        status.os || "Bilinmiyor"
+    );
+
+
+    addStatusItem(
+        grid,
+        "Bilgisayar",
+        status.hostname || "Bilinmiyor"
+    );
+
+
+    if (
+        status.battery_percent !== null &&
+        status.battery_percent !== undefined
+    ) {
+
+        addStatusItem(
+            grid,
+            "Batarya",
+            `${status.battery_percent}%`
+        );
+
+    } else {
+
+        addStatusItem(
+            grid,
+            "Batarya",
+            "Yok"
+        );
+    }
+
+
+    if (
+        status.battery_plugged !== null &&
+        status.battery_plugged !== undefined
+    ) {
+
+        addStatusItem(
+            grid,
+            "Şarj",
+            status.battery_plugged
+                ? "Bağlı"
+                : "Bağlı değil"
+        );
+    }
+
+
+    card.appendChild(title);
+    card.appendChild(grid);
+
+    consoleEl.appendChild(card);
+
+    consoleEl.scrollTop =
+        consoleEl.scrollHeight;
+}
+
+
+/*
+ * ---------------------------------------------------------
+ * STATUS ITEM
+ * ---------------------------------------------------------
+ */
+
+function addStatusItem(
+    parent,
+    label,
+    value
+) {
+
+    const item =
+        document.createElement("div");
+
+    item.style.padding = "12px";
+    item.style.borderRadius = "10px";
+    item.style.background =
+        "rgba(255,255,255,0.05)";
+
+
+    const labelEl =
+        document.createElement("div");
+
+    labelEl.textContent =
+        label;
+
+    labelEl.style.fontSize = "12px";
+    labelEl.style.opacity = "0.65";
+
+
+    const valueEl =
+        document.createElement("div");
+
+    valueEl.textContent =
+        value;
+
+    valueEl.style.fontSize = "15px";
+    valueEl.style.fontWeight = "600";
+    valueEl.style.marginTop = "4px";
+
+
+    item.appendChild(labelEl);
+    item.appendChild(valueEl);
+
+    parent.appendChild(item);
 }
 
 /*
