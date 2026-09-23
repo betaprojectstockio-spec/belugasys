@@ -707,18 +707,9 @@ function handleAgentResponse(data) {
         return;
     }
 
-    if (
-        typeof data === "string"
-    ) {
-
-        addLog(
-            data,
-            "agent"
-        );
-
-        return;
-    }
-
+    /*
+     * Agent hata döndürdüyse
+     */
     if (data.ok === false) {
 
         addLog(
@@ -729,44 +720,135 @@ function handleAgentResponse(data) {
         return;
     }
 
+    /*
+     * Agent mesajı
+     */
     if (data.message) {
 
         addLog(
-            `Agent: ${data.message}`,
+            `Beluga: ${data.message}`,
             "agent"
         );
 
         return;
     }
 
+    /*
+     * COMMAND RESULT
+     */
     if (data.result) {
 
+        const result = data.result;
+
+        /*
+         * -----------------------------------------
+         * SCREENSHOT
+         * -----------------------------------------
+         */
+
         if (
-            typeof data.result === "string"
+            result.data &&
+            result.data.image_base64
+        ) {
+
+            showScreenshot(
+                result.data.image_base64
+            );
+
+            return;
+        }
+
+
+        /*
+         * -----------------------------------------
+         * SYSTEM STATUS
+         * -----------------------------------------
+         */
+
+        if (
+            result.data &&
+            (
+                "cpu_percent" in result.data ||
+                "ram_percent" in result.data ||
+                "disk_percent" in result.data
+            )
+        ) {
+
+            showSystemStatus(
+                result.data
+            );
+
+            return;
+        }
+
+
+        /*
+         * Normal string sonuç
+         */
+
+        if (
+            typeof result === "string"
         ) {
 
             addLog(
-                `Agent: ${data.result}`,
+                `Beluga: ${result}`,
                 "agent"
             );
 
-        } else {
+            return;
+        }
+
+
+        /*
+         * Genel başarı mesajı
+         */
+
+        if (result.ok === true) {
 
             addLog(
-                `Agent: ${JSON.stringify(data.result)}`,
+                "Beluga: İşlem başarıyla tamamlandı.",
                 "agent"
             );
+
+            return;
         }
+
+
+        /*
+         * Bilinmeyen ama küçük JSON sonuçları
+         */
+
+        addLog(
+            `Beluga: ${formatSimpleResult(result)}`,
+            "agent"
+        );
 
         return;
     }
 
+
+    /*
+     * Direkt response
+     */
+
+    if (
+        typeof data === "string"
+    ) {
+
+        addLog(
+            `Beluga: ${data}`,
+            "agent"
+        );
+
+        return;
+    }
+
+
     addLog(
-        `Agent: ${JSON.stringify(data)}`,
+        "Beluga: İşlem tamamlandı.",
         "agent"
     );
 }
-
 
 /*
  * ---------------------------------------------------------
