@@ -10,21 +10,18 @@ let devices = [];
 let activeDevice = null;
 let socket = null;
 
-const $ = (id) =>
-    document.getElementById(id);
+const $ = (id) => document.getElementById(id);
 
 
-/*
- * ---------------------------------------------------------
- * AUTH
- * ---------------------------------------------------------
- */
+/* =========================================================
+   AUTH
+   ========================================================= */
 
 function showAuthError(message) {
-    const element = $("authError");
+    const el = $("authError");
 
-    if (element) {
-        element.textContent = message;
+    if (el) {
+        el.textContent = message;
     }
 }
 
@@ -49,10 +46,10 @@ function saveAuth(token, user) {
 async function login() {
 
     const username =
-        $("loginUsername").value.trim();
+        $("loginUsername")?.value.trim();
 
     const password =
-        $("loginPassword").value;
+        $("loginPassword")?.value;
 
     if (!username || !password) {
 
@@ -113,17 +110,13 @@ async function login() {
 async function register() {
 
     const username =
-        $("registerUsername")
-            .value
-            .trim();
+        $("registerUsername")?.value.trim();
 
     const password =
-        $("registerPassword")
-            .value;
+        $("registerPassword")?.value;
 
     const password2 =
-        $("registerPassword2")
-            .value;
+        $("registerPassword2")?.value;
 
     if (!username || !password) {
 
@@ -216,28 +209,21 @@ async function logout() {
 
     if (socket) {
 
-        socket.disconnect();
+        try {
+            socket.disconnect();
+        } catch (_) {}
+
         socket = null;
     }
 
-    const app = $("app");
-    const authScreen = $("authScreen");
-
-    if (app) {
-        app.classList.add("hidden");
-    }
-
-    if (authScreen) {
-        authScreen.classList.remove("hidden");
-    }
+    $("app")?.classList.add("hidden");
+    $("authScreen")?.classList.remove("hidden");
 }
 
 
-/*
- * ---------------------------------------------------------
- * API
- * ---------------------------------------------------------
- */
+/* =========================================================
+   API
+   ========================================================= */
 
 async function apiFetch(
     path,
@@ -293,20 +279,18 @@ async function apiFetch(
 }
 
 
-/*
- * ---------------------------------------------------------
- * APP
- * ---------------------------------------------------------
- */
+/* =========================================================
+   APPLICATION
+   ========================================================= */
 
 function openApplication() {
 
     $("authScreen")
-        .classList
+        ?.classList
         .add("hidden");
 
     $("app")
-        .classList
+        ?.classList
         .remove("hidden");
 
     if ($("usernameLabel")) {
@@ -324,9 +308,7 @@ function openApplication() {
     }
 
     loadDevices();
-
     connectSocket();
-
     checkGateway();
 }
 
@@ -353,11 +335,9 @@ async function restoreSession() {
 }
 
 
-/*
- * ---------------------------------------------------------
- * DEVICES
- * ---------------------------------------------------------
- */
+/* =========================================================
+   DEVICES
+   ========================================================= */
 
 async function loadDevices() {
 
@@ -382,7 +362,7 @@ async function loadDevices() {
 
         if (
             !activeDevice &&
-            devices.length > 0
+            devices.length
         ) {
 
             selectDevice(
@@ -427,17 +407,23 @@ function renderDevices() {
             </div>
 
             <div class="device-info">
+
                 <strong>
-                    ${escapeHtml(device.name)}
+                    ${escapeHtml(
+                        device.name || "Cihaz"
+                    )}
                 </strong>
 
                 <span>
-                    ${escapeHtml(device.serial)}
+                    ${escapeHtml(
+                        device.serial || ""
+                    )}
                 </span>
 
                 <small>
                     ● Hazır
                 </small>
+
             </div>
         `;
 
@@ -484,11 +470,9 @@ async function selectDevice(device) {
 }
 
 
-/*
- * ---------------------------------------------------------
- * SOCKET
- * ---------------------------------------------------------
- */
+/* =========================================================
+   SOCKET
+   ========================================================= */
 
 function connectSocket() {
 
@@ -503,10 +487,13 @@ function connectSocket() {
         io(
             GATEWAY_URL,
             {
-                transports:
-                    ["websocket"]
+                transports: [
+                    "polling",
+                    "websocket"
+                ]
             }
         );
+
 
     socket.on(
         "connect",
@@ -571,10 +558,13 @@ function connectSocket() {
         "device:registered",
         (data) => {
 
-            if (!data.ok) {
+            if (!data?.ok) {
 
                 addLog(
-                    `Beluga: ${data.error}`,
+                    `Beluga: ${
+                        data?.error ||
+                        "Cihaz kaydı başarısız."
+                    }`,
                     "error"
                 );
 
@@ -593,7 +583,7 @@ function connectSocket() {
         "device:presence",
         (data) => {
 
-            if (!data.serial) {
+            if (!data?.serial) {
                 return;
             }
 
@@ -607,10 +597,6 @@ function connectSocket() {
     );
 
 
-    /*
-     * Agent'tan gelen E2EE cevap
-     */
-
     socket.on(
         "relay:message",
         async (data) => {
@@ -619,16 +605,11 @@ function connectSocket() {
                 return;
             }
 
-            /*
-             * Gateway'den gelen mesajın
-             * gerçekten aktif cihaza ait
-             * olduğundan emin ol.
-             */
-
             if (
                 activeDevice &&
                 data.serial &&
-                data.serial !== activeDevice.serial
+                data.serial !==
+                    activeDevice.serial
             ) {
                 return;
             }
@@ -695,11 +676,9 @@ function connectSocket() {
 }
 
 
-/*
- * ---------------------------------------------------------
- * AGENT RESPONSE
- * ---------------------------------------------------------
- */
+/* =========================================================
+   AGENT RESPONSE
+   ========================================================= */
 
 function handleAgentResponse(data) {
 
@@ -707,22 +686,32 @@ function handleAgentResponse(data) {
         return;
     }
 
-    /*
-     * Agent hata döndürdüyse
-     */
+
+    if (typeof data === "string") {
+
+        addLog(
+            `Agent: ${data}`,
+            "agent"
+        );
+
+        return;
+    }
+
+
     if (data.ok === false) {
 
         addLog(
-            `Agent: ${data.error || "Komut başarısız."}`,
+            `Agent: ${
+                data.error ||
+                "Komut başarısız."
+            }`,
             "error"
         );
 
         return;
     }
 
-    /*
-     * Agent mesajı
-     */
+
     if (data.message) {
 
         addLog(
@@ -733,96 +722,232 @@ function handleAgentResponse(data) {
         return;
     }
 
+
+    if (!data.result) {
+
+        addLog(
+            `Agent: ${JSON.stringify(data)}`,
+            "agent"
+        );
+
+        return;
+    }
+
+
+    const result =
+        data.result;
+
+
+    if (result.ok === false) {
+
+        addLog(
+            `Agent: ${
+                result.error ||
+                "Komut başarısız."
+            }`,
+            "error"
+        );
+
+        return;
+    }
+
+
     /*
-     * COMMAND RESULT
+     * SCREENSHOT
      */
-    if (data.result) {
 
-        const result = data.result;
+    if (
+        result.data &&
+        typeof result.data === "object" &&
+        result.data.image_base64
+    ) {
 
-        /*
- * ---------------------------------------------------------
- * SCREENSHOT
- * ---------------------------------------------------------
- */
+        showScreenshot(
+            result.data.image_base64
+        );
+
+        return;
+    }
+
+
+    /*
+     * SYSTEM STATUS
+     */
+
+    if (
+        result.data &&
+        typeof result.data === "object" &&
+        (
+            "cpu_percent" in result.data ||
+            "ram_percent" in result.data ||
+            "disk_percent" in result.data
+        )
+    ) {
+
+        showSystemStatus(
+            result.data
+        );
+
+        return;
+    }
+
+
+    /*
+     * STRING
+     */
+
+    if (
+        typeof result.data === "string"
+    ) {
+
+        addLog(
+            `Agent: ${result.data}`,
+            "agent"
+        );
+
+        return;
+    }
+
+
+    /*
+     * OBJECT
+     */
+
+    addLog(
+        `Agent: ${
+            JSON.stringify(
+                result.data ?? result
+            )
+        }`,
+        "agent"
+    );
+}
+
+
+/* =========================================================
+   SCREENSHOT
+   ========================================================= */
 
 function showScreenshot(base64) {
 
-    const consoleEl = $("consoleLog");
+    const consoleEl =
+        $("consoleLog");
 
     if (!consoleEl) {
         return;
     }
 
-    const wrapper = document.createElement("div");
+    const wrapper =
+        document.createElement("div");
 
     wrapper.className =
         "console-line agent screenshot-result";
 
-    const title = document.createElement("div");
+
+    const title =
+        document.createElement("div");
 
     title.textContent =
         "Beluga • Ekran Görüntüsü";
 
-    title.style.fontWeight = "700";
-    title.style.marginBottom = "10px";
+    title.style.fontWeight =
+        "700";
 
-    const image = document.createElement("img");
+    title.style.marginBottom =
+        "10px";
 
-    /*
-     * Agent JPEG gönderiyor.
-     */
+
+    const image =
+        document.createElement("img");
+
     image.src =
         `data:image/jpeg;base64,${base64}`;
 
     image.alt =
         "Beluga ekran görüntüsü";
 
-    image.style.display = "block";
-    image.style.maxWidth = "100%";
-    image.style.width = "min(900px, 100%)";
-    image.style.height = "auto";
-    image.style.borderRadius = "14px";
-    image.style.cursor = "pointer";
+    image.style.display =
+        "block";
+
+    image.style.maxWidth =
+        "100%";
+
+    image.style.width =
+        "min(900px, 100%)";
+
+    image.style.height =
+        "auto";
+
+    image.style.borderRadius =
+        "14px";
+
+    image.style.cursor =
+        "pointer";
 
     image.title =
         "Büyütmek için tıkla";
+
 
     image.onclick = () => {
 
         const newWindow =
             window.open();
 
-        if (newWindow) {
-
-            newWindow.document.write(`
-                <html>
-                <head>
-                    <title>Beluga Screenshot</title>
-                    <style>
-                        body {
-                            margin: 0;
-                            background: #111;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            min-height: 100vh;
-                        }
-
-                        img {
-                            max-width: 100%;
-                            max-height: 100vh;
-                            object-fit: contain;
-                        }
-                    </style>
-                </head>
-                <body>
-                    <img src="${image.src}">
-                </body>
-                </html>
-            `);
+        if (!newWindow) {
+            return;
         }
+
+        newWindow.document.write(`
+            <!DOCTYPE html>
+
+            <html>
+
+            <head>
+
+                <meta charset="UTF-8">
+
+                <title>
+                    Beluga Screenshot
+                </title>
+
+                <style>
+
+                    html,
+                    body {
+                        margin: 0;
+                        width: 100%;
+                        height: 100%;
+                        background: #111;
+                    }
+
+                    body {
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    }
+
+                    img {
+                        max-width: 100%;
+                        max-height: 100%;
+                        object-fit: contain;
+                    }
+
+                </style>
+
+            </head>
+
+            <body>
+
+                <img src="${image.src}">
+
+            </body>
+
+            </html>
+        `);
+
+        newWindow.document.close();
     };
+
 
     wrapper.appendChild(title);
     wrapper.appendChild(image);
@@ -834,19 +959,19 @@ function showScreenshot(base64) {
 }
 
 
-/*
- * ---------------------------------------------------------
- * SYSTEM STATUS
- * ---------------------------------------------------------
- */
+/* =========================================================
+   SYSTEM STATUS
+   ========================================================= */
 
 function showSystemStatus(status) {
 
-    const consoleEl = $("consoleLog");
+    const consoleEl =
+        $("consoleLog");
 
     if (!consoleEl) {
         return;
     }
+
 
     const card =
         document.createElement("div");
@@ -854,9 +979,15 @@ function showSystemStatus(status) {
     card.className =
         "system-status-result";
 
-    card.style.padding = "16px";
-    card.style.marginTop = "10px";
-    card.style.borderRadius = "14px";
+    card.style.padding =
+        "16px";
+
+    card.style.marginTop =
+        "10px";
+
+    card.style.borderRadius =
+        "14px";
+
     card.style.background =
         "rgba(255,255,255,0.05)";
 
@@ -867,20 +998,27 @@ function showSystemStatus(status) {
     title.textContent =
         "Beluga • Sistem Durumu";
 
-    title.style.fontSize = "18px";
-    title.style.fontWeight = "700";
-    title.style.marginBottom = "14px";
+    title.style.fontSize =
+        "18px";
+
+    title.style.fontWeight =
+        "700";
+
+    title.style.marginBottom =
+        "14px";
 
 
     const grid =
         document.createElement("div");
 
-    grid.style.display = "grid";
+    grid.style.display =
+        "grid";
 
     grid.style.gridTemplateColumns =
         "repeat(auto-fit, minmax(150px, 1fr))";
 
-    grid.style.gap = "10px";
+    grid.style.gap =
+        "10px";
 
 
     addStatusItem(
@@ -889,11 +1027,13 @@ function showSystemStatus(status) {
         `${status.cpu_percent ?? 0}%`
     );
 
+
     addStatusItem(
         grid,
         "RAM",
         `${status.ram_percent ?? 0}%`
     );
+
 
     addStatusItem(
         grid,
@@ -952,6 +1092,21 @@ function showSystemStatus(status) {
     }
 
 
+    if (
+        status.uptime_seconds !==
+        undefined
+    ) {
+
+        addStatusItem(
+            grid,
+            "Çalışma Süresi",
+            formatUptime(
+                status.uptime_seconds
+            )
+        );
+    }
+
+
     card.appendChild(title);
     card.appendChild(grid);
 
@@ -962,12 +1117,6 @@ function showSystemStatus(status) {
 }
 
 
-/*
- * ---------------------------------------------------------
- * STATUS ITEM
- * ---------------------------------------------------------
- */
-
 function addStatusItem(
     parent,
     label,
@@ -977,8 +1126,12 @@ function addStatusItem(
     const item =
         document.createElement("div");
 
-    item.style.padding = "12px";
-    item.style.borderRadius = "10px";
+    item.style.padding =
+        "12px";
+
+    item.style.borderRadius =
+        "10px";
+
     item.style.background =
         "rgba(255,255,255,0.05)";
 
@@ -989,8 +1142,11 @@ function addStatusItem(
     labelEl.textContent =
         label;
 
-    labelEl.style.fontSize = "12px";
-    labelEl.style.opacity = "0.65";
+    labelEl.style.fontSize =
+        "12px";
+
+    labelEl.style.opacity =
+        "0.65";
 
 
     const valueEl =
@@ -999,9 +1155,14 @@ function addStatusItem(
     valueEl.textContent =
         value;
 
-    valueEl.style.fontSize = "15px";
-    valueEl.style.fontWeight = "600";
-    valueEl.style.marginTop = "4px";
+    valueEl.style.fontSize =
+        "15px";
+
+    valueEl.style.fontWeight =
+        "600";
+
+    valueEl.style.marginTop =
+        "4px";
 
 
     item.appendChild(labelEl);
@@ -1010,11 +1171,34 @@ function addStatusItem(
     parent.appendChild(item);
 }
 
-/*
- * ---------------------------------------------------------
- * DEVICE SECRETS
- * ---------------------------------------------------------
- */
+
+function formatUptime(seconds) {
+
+    const total =
+        Number(seconds) || 0;
+
+    const days =
+        Math.floor(
+            total / 86400
+        );
+
+    const hours =
+        Math.floor(
+            (total % 86400) / 3600
+        );
+
+    const minutes =
+        Math.floor(
+            (total % 3600) / 60
+        );
+
+    return `${days}g ${hours}s ${minutes}dk`;
+}
+
+
+/* =========================================================
+   DEVICE SECRETS
+   ========================================================= */
 
 function getAllDeviceSecrets() {
 
@@ -1064,11 +1248,6 @@ function saveDeviceSecret(
 }
 
 
-/*
- * Server yeni cihaz oluştururken
- * pairing_secret döndürürse otomatik sakla.
- */
-
 function rememberPairingSecret(
     responseData,
     serial,
@@ -1084,25 +1263,22 @@ function rememberPairingSecret(
         fallbackSecret ||
         "";
 
-    if (secret) {
-
-        saveDeviceSecret(
-            serial,
-            secret
-        );
-
-        return secret;
+    if (!secret) {
+        return "";
     }
 
-    return "";
+    saveDeviceSecret(
+        serial,
+        secret
+    );
+
+    return secret;
 }
 
 
-/*
- * ---------------------------------------------------------
- * COMMANDS
- * ---------------------------------------------------------
- */
+/* =========================================================
+   COMMANDS
+   ========================================================= */
 
 async function sendCommand(
     command,
@@ -1119,6 +1295,7 @@ async function sendCommand(
         return false;
     }
 
+
     if (
         !socket ||
         !socket.connected
@@ -1131,6 +1308,7 @@ async function sendCommand(
 
         return false;
     }
+
 
     const secret =
         getDeviceSecret(
@@ -1146,6 +1324,7 @@ async function sendCommand(
 
         return false;
     }
+
 
     try {
 
@@ -1168,6 +1347,7 @@ async function sendCommand(
                 }
             );
 
+
         socket.emit(
             "relay:message",
             {
@@ -1181,6 +1361,7 @@ async function sendCommand(
                     encrypted
             }
         );
+
 
         addLog(
             `Komut: ${command}`,
@@ -1201,11 +1382,9 @@ async function sendCommand(
 }
 
 
-/*
- * ---------------------------------------------------------
- * BRAIN
- * ---------------------------------------------------------
- */
+/* =========================================================
+   BRAIN
+   ========================================================= */
 
 async function sendBrainCommand() {
 
@@ -1216,6 +1395,7 @@ async function sendBrainCommand() {
         return;
     }
 
+
     const text =
         input.value.trim();
 
@@ -1223,12 +1403,14 @@ async function sendBrainCommand() {
         return;
     }
 
+
     addLog(
         `Siz: ${text}`,
         "user"
     );
 
     input.value = "";
+
 
     const normalized =
         text
@@ -1261,7 +1443,7 @@ async function sendBrainCommand() {
 
 
     /*
-     * PRIVATE SYSTEM'DEN ÇIKIŞ
+     * NORMAL SYSTEM
      */
 
     if (
@@ -1284,28 +1466,13 @@ async function sendBrainCommand() {
     }
 
 
-    /*
-     * BRAIN
-     */
-
     addLog(
         "Beluga Brain isteği analiz ediyor...",
         "system"
     );
 
 
-    /*
-     * KOMUT HARİTASI
-     *
-     * Kullanıcının yazdığı doğal ifadeleri
-     * gerçek Agent komutlarına çevirir.
-     */
-
     const commandMap = [
-
-        /*
-         * PRIVATE SYSTEM
-         */
 
         {
             keywords: [
@@ -1314,15 +1481,9 @@ async function sendBrainCommand() {
                 "özel sistem",
                 "özel moda geç"
             ],
-
             command:
                 "privatesystem"
         },
-
-
-        /*
-         * PRIVATE SYSTEM'DEN ÇIKIŞ
-         */
 
         {
             keywords: [
@@ -1331,15 +1492,9 @@ async function sendBrainCommand() {
                 "özel sistemden çık",
                 "normal moda geç"
             ],
-
             command:
                 "onsystemlight"
         },
-
-
-        /*
-         * SCREENSHOT
-         */
 
         {
             keywords: [
@@ -1352,15 +1507,9 @@ async function sendBrainCommand() {
                 "ekranı çek",
                 "ekran resmi"
             ],
-
             command:
                 "screenshot"
         },
-
-
-        /*
-         * SYSTEM STATUS
-         */
 
         {
             keywords: [
@@ -1373,15 +1522,9 @@ async function sendBrainCommand() {
                 "bilgisayarın durumunu göster",
                 "sistemi kontrol et"
             ],
-
             command:
                 "system_status"
         },
-
-
-        /*
-         * MOUSE MOVE
-         */
 
         {
             keywords: [
@@ -1390,15 +1533,9 @@ async function sendBrainCommand() {
                 "fareyi hareket ettir",
                 "fareyi götür"
             ],
-
             command:
                 "mouse_move"
         },
-
-
-        /*
-         * MOUSE CLICK
-         */
 
         {
             keywords: [
@@ -1408,15 +1545,9 @@ async function sendBrainCommand() {
                 "fare ile tıkla",
                 "tıkla"
             ],
-
             command:
                 "mouse_click"
         },
-
-
-        /*
-         * TYPE TEXT
-         */
 
         {
             keywords: [
@@ -1425,32 +1556,19 @@ async function sendBrainCommand() {
                 "metin yaz",
                 "yaz"
             ],
-
             command:
                 "type_text"
         },
-
-
-        /*
-         * KEY PRESS
-         */
 
         {
             keywords: [
                 "key_press",
                 "key press",
-                "tuşa bas",
                 "tuşa bas"
             ],
-
             command:
                 "key_press"
         },
-
-
-        /*
-         * OPEN APP
-         */
 
         {
             keywords: [
@@ -1460,15 +1578,9 @@ async function sendBrainCommand() {
                 "program aç",
                 "uygulamayı aç"
             ],
-
             command:
                 "open_app"
         },
-
-
-        /*
-         * LOCK SCREEN
-         */
 
         {
             keywords: [
@@ -1479,17 +1591,11 @@ async function sendBrainCommand() {
                 "pc'yi kilitle",
                 "pc yi kilitle"
             ],
-
             command:
                 "lock_screen"
         }
-
     ];
 
-
-    /*
-     * Komut eşleştirme
-     */
 
     for (
         const item of commandMap
@@ -1503,25 +1609,24 @@ async function sendBrainCommand() {
                     )
             );
 
-        if (found) {
-
-            addLog(
-                `Beluga Brain: ${item.command}`,
-                "system"
-            );
-
-            await sendCommand(
-                item.command
-            );
-
-            return;
+        if (!found) {
+            continue;
         }
+
+
+        addLog(
+            `Beluga Brain: ${item.command}`,
+            "system"
+        );
+
+
+        await sendCommand(
+            item.command
+        );
+
+        return;
     }
 
-
-    /*
-     * Komut bulunamadı
-     */
 
     addLog(
         "Beluga Brain: Bu komut için henüz bir işlem tanımlanmadı.",
@@ -1530,11 +1635,9 @@ async function sendBrainCommand() {
 }
 
 
-/*
- * ---------------------------------------------------------
- * PRIVATE SYSTEM UI
- * ---------------------------------------------------------
- */
+/* =========================================================
+   PRIVATE SYSTEM
+   ========================================================= */
 
 function updatePrivateSystemStatus(
     text,
@@ -1570,15 +1673,18 @@ async function enablePrivateSystem() {
         return;
     }
 
+
     updatePrivateSystemStatus(
         "Etkinleştiriliyor...",
         false
     );
 
+
     const success =
         await sendCommand(
             "privatesystem"
         );
+
 
     if (success) {
 
@@ -1602,15 +1708,18 @@ async function disablePrivateSystem() {
         return;
     }
 
+
     updatePrivateSystemStatus(
         "Normal moda dönülüyor...",
         false
     );
 
+
     const success =
         await sendCommand(
             "onsystemlight"
         );
+
 
     if (success) {
 
@@ -1622,18 +1731,16 @@ async function disablePrivateSystem() {
 }
 
 
-/*
- * ---------------------------------------------------------
- * UI
- * ---------------------------------------------------------
- */
+/* =========================================================
+   UI
+   ========================================================= */
 
 function navigate(page) {
 
     document
         .querySelectorAll(".page")
         .forEach(
-            (element) => {
+            element => {
 
                 element.classList.remove(
                     "active"
@@ -1641,8 +1748,10 @@ function navigate(page) {
             }
         );
 
+
     const target =
         $(`${page}Page`);
+
 
     if (target) {
 
@@ -1651,10 +1760,11 @@ function navigate(page) {
         );
     }
 
+
     document
         .querySelectorAll(".nav-item")
         .forEach(
-            (button) => {
+            button => {
 
                 button.classList.toggle(
                     "active",
@@ -1677,6 +1787,7 @@ function addLog(
         return;
     }
 
+
     const line =
         document.createElement("div");
 
@@ -1686,9 +1797,11 @@ function addLog(
     line.textContent =
         text;
 
+
     consoleEl.appendChild(
         line
     );
+
 
     consoleEl.scrollTop =
         consoleEl.scrollHeight;
@@ -1721,11 +1834,9 @@ function escapeHtml(text) {
 }
 
 
-/*
- * ---------------------------------------------------------
- * GATEWAY
- * ---------------------------------------------------------
- */
+/* =========================================================
+   GATEWAY
+   ========================================================= */
 
 async function checkGateway() {
 
@@ -1739,6 +1850,7 @@ async function checkGateway() {
         const data =
             await response.json();
 
+
         if ($("gatewayStatus")) {
 
             $("gatewayStatus")
@@ -1747,6 +1859,7 @@ async function checkGateway() {
                     ? "● Gateway + Database Online"
                     : "● Gateway Online";
         }
+
 
         if ($("gatewayCard")) {
 
@@ -1776,48 +1889,42 @@ async function checkGateway() {
 }
 
 
-/*
- * ---------------------------------------------------------
- * EVENTS
- * ---------------------------------------------------------
- */
+/* =========================================================
+   EVENTS
+   ========================================================= */
 
 if ($("loginBtn")) {
 
-    $("loginBtn")
-        .onclick =
+    $("loginBtn").onclick =
         login;
 }
 
 
 if ($("registerBtn")) {
 
-    $("registerBtn")
-        .onclick =
+    $("registerBtn").onclick =
         register;
 }
 
 
 if ($("logoutBtn")) {
 
-    $("logoutBtn")
-        .onclick =
+    $("logoutBtn").onclick =
         logout;
 }
 
 
 if ($("showRegisterBtn")) {
 
-    $("showRegisterBtn")
-        .onclick =
+    $("showRegisterBtn").onclick =
         () => {
 
             $("loginBox")
-                .classList
+                ?.classList
                 .add("hidden");
 
             $("registerBox")
-                .classList
+                ?.classList
                 .remove("hidden");
 
             showAuthError("");
@@ -1827,16 +1934,15 @@ if ($("showRegisterBtn")) {
 
 if ($("showLoginBtn")) {
 
-    $("showLoginBtn")
-        .onclick =
+    $("showLoginBtn").onclick =
         () => {
 
             $("registerBox")
-                .classList
+                ?.classList
                 .add("hidden");
 
             $("loginBox")
-                .classList
+                ?.classList
                 .remove("hidden");
 
             showAuthError("");
@@ -1846,8 +1952,7 @@ if ($("showLoginBtn")) {
 
 if ($("sendBtn")) {
 
-    $("sendBtn")
-        .onclick =
+    $("sendBtn").onclick =
         sendBrainCommand;
 }
 
@@ -1857,7 +1962,7 @@ if ($("commandInput")) {
     $("commandInput")
         .addEventListener(
             "keydown",
-            (event) => {
+            event => {
 
                 if (
                     event.key === "Enter" &&
@@ -1875,21 +1980,20 @@ if ($("commandInput")) {
 
 if ($("openBrainBtn")) {
 
-    $("openBrainBtn")
-        .onclick =
+    $("openBrainBtn").onclick =
         () =>
             navigate("brain");
 }
 
 
-/*
- * Navigation
- */
+/* =========================================================
+   NAVIGATION
+   ========================================================= */
 
 document
     .querySelectorAll(".nav-item")
     .forEach(
-        (button) => {
+        button => {
 
             button.onclick =
                 () =>
@@ -1900,18 +2004,17 @@ document
     );
 
 
-/*
- * Add device
- */
+/* =========================================================
+   ADD DEVICE
+   ========================================================= */
 
 if ($("addDeviceBtn")) {
 
-    $("addDeviceBtn")
-        .onclick =
+    $("addDeviceBtn").onclick =
         () => {
 
             $("deviceModal")
-                .classList
+                ?.classList
                 .remove("hidden");
         };
 }
@@ -1919,42 +2022,38 @@ if ($("addDeviceBtn")) {
 
 if ($("closeDeviceBtn")) {
 
-    $("closeDeviceBtn")
-        .onclick =
+    $("closeDeviceBtn").onclick =
         () => {
 
             $("deviceModal")
-                .classList
+                ?.classList
                 .add("hidden");
         };
 }
 
 
-/*
- * ---------------------------------------------------------
- * SAVE DEVICE
- * ---------------------------------------------------------
- */
+/* =========================================================
+   SAVE DEVICE
+   ========================================================= */
 
 if ($("saveDeviceBtn")) {
 
-    $("saveDeviceBtn")
-        .onclick =
+    $("saveDeviceBtn").onclick =
         async () => {
 
             const name =
                 $("deviceName")
-                    .value
+                    ?.value
                     .trim();
 
             const serial =
                 $("deviceSerial")
-                    .value
+                    ?.value
                     .trim();
 
             const secret =
                 $("deviceSecret")
-                    .value
+                    ?.value
                     .trim();
 
 
@@ -1986,23 +2085,13 @@ if ($("saveDeviceBtn")) {
                                 JSON.stringify({
                                     name,
                                     serial,
-
-                                    /*
-                                     * Boş bırakılırsa
-                                     * server secret üretir.
-                                     */
-
                                     pairing_secret:
-                                        secret || undefined
+                                        secret ||
+                                        undefined
                                 })
                         }
                     );
 
-
-                /*
-                 * Server'ın döndürdüğü
-                 * pairing secret'ı sakla.
-                 */
 
                 const savedSecret =
                     rememberPairingSecret(
@@ -2012,35 +2101,38 @@ if ($("saveDeviceBtn")) {
                     );
 
 
-                if (!savedSecret) {
-
-                    addLog(
-                        "Cihaz oluşturuldu ancak pairing secret alınamadı.",
-                        "error"
-                    );
-
-                } else {
+                if (savedSecret) {
 
                     addLog(
                         "Cihaz pairing secret ile kaydedildi.",
                         "system"
                     );
+
+                } else {
+
+                    addLog(
+                        "Cihaz oluşturuldu ancak pairing secret alınamadı.",
+                        "error"
+                    );
                 }
 
 
                 $("deviceModal")
-                    .classList
+                    ?.classList
                     .add("hidden");
 
 
-                $("deviceName")
-                    .value = "";
+                if ($("deviceName")) {
+                    $("deviceName").value = "";
+                }
 
-                $("deviceSerial")
-                    .value = "";
+                if ($("deviceSerial")) {
+                    $("deviceSerial").value = "";
+                }
 
-                $("deviceSecret")
-                    .value = "";
+                if ($("deviceSecret")) {
+                    $("deviceSecret").value = "";
+                }
 
 
                 await loadDevices();
@@ -2056,54 +2148,40 @@ if ($("saveDeviceBtn")) {
 }
 
 
-/*
- * ---------------------------------------------------------
- * PRIVATE SYSTEM BUTTONS
- * ---------------------------------------------------------
- */
+/* =========================================================
+   PRIVATE SYSTEM BUTTONS
+   ========================================================= */
 
 if ($("privateSystemBtn")) {
 
-    $("privateSystemBtn")
-        .onclick =
+    $("privateSystemBtn").onclick =
         enablePrivateSystem;
 }
 
 
 if ($("onSystemLightBtn")) {
 
-    $("onSystemLightBtn")
-        .onclick =
+    $("onSystemLightBtn").onclick =
         disablePrivateSystem;
 }
 
 
-/*
- * Bazı tasarımlarda ID farklı
- * kullanılırsa alternatifleri de
- * destekle.
- */
-
 if ($("enablePrivateSystemBtn")) {
 
-    $("enablePrivateSystemBtn")
-        .onclick =
+    $("enablePrivateSystemBtn").onclick =
         enablePrivateSystem;
 }
 
 
 if ($("disablePrivateSystemBtn")) {
 
-    $("disablePrivateSystemBtn")
-        .onclick =
+    $("disablePrivateSystemBtn").onclick =
         disablePrivateSystem;
 }
 
 
-/*
- * ---------------------------------------------------------
- * START
- * ---------------------------------------------------------
- */
+/* =========================================================
+   START
+   ========================================================= */
 
 restoreSession();
