@@ -12,6 +12,7 @@
     "type_text",
     "key_press",
     "open_app",
-    "lock_screen"
+    "lock_screen",
+    "privatesystem"
   ]
 }

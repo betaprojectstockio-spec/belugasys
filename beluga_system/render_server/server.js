@@ -827,22 +827,28 @@ app.post(
                     req.body?.serial || ""
                 ).trim();
 
-            const secret =
-                String(
-                    req.body?.pairing_secret || ""
-                );
+            let secret =
+    String(
+        req.body?.pairing_secret || ""
+    ).trim();
 
-            if (
-                !name ||
-                !serial ||
-                !secret
-            ) {
-                return res.status(400)
-                    .json({
-                        error:
-                            "Cihaz bilgileri eksik.",
-                    });
-            }
+if (!secret) {
+    secret =
+        crypto
+            .randomBytes(32)
+            .toString("base64url");
+}
+
+if (
+    !name ||
+    !serial
+) {
+    return res.status(400)
+        .json({
+            error:
+                "Cihaz adı ve seri numarası gerekli.",
+        });
+}
 
             const deviceId =
                 crypto.randomUUID();
@@ -882,10 +888,11 @@ app.post(
                 ok: true,
 
                 device: {
-                    id: deviceId,
-                    serial,
-                    name,
-                },
+    id: deviceId,
+    serial,
+    name,
+    pairing_secret: secret,
+},
             });
 
         } catch (error) {
