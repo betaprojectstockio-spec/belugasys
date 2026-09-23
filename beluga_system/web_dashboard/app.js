@@ -1,4 +1,3 @@
-
 const GATEWAY_URL =
     window.BELUGA_GATEWAY_URL ||
     "https://belugasys.onrender.com";
@@ -1044,9 +1043,7 @@ async function sendBrainCommand() {
 
 
     /*
-     * Şimdilik Brain endpoint'i
-     * hazır olmadığı için komutu
-     * doğrudan cihaza gönderiyoruz.
+     * BRAIN
      */
 
     addLog(
@@ -1056,31 +1053,201 @@ async function sendBrainCommand() {
 
 
     /*
-     * Basit komut algılama.
+     * KOMUT HARİTASI
+     *
+     * Kullanıcının yazdığı doğal ifadeleri
+     * gerçek Agent komutlarına çevirir.
      */
 
     const commandMap = [
 
+        /*
+         * PRIVATE SYSTEM
+         */
+
         {
             keywords: [
                 "private system",
-                "privatesystem"
+                "privatesystem",
+                "özel sistem",
+                "özel moda geç"
             ],
+
             command:
                 "privatesystem"
         },
 
+
+        /*
+         * PRIVATE SYSTEM'DEN ÇIKIŞ
+         */
+
         {
             keywords: [
                 "onsystemlight",
-                "on system light"
+                "on system light",
+                "özel sistemden çık",
+                "normal moda geç"
             ],
+
             command:
                 "onsystemlight"
+        },
+
+
+        /*
+         * SCREENSHOT
+         */
+
+        {
+            keywords: [
+                "screenshot",
+                "screen shot",
+                "ekran görüntüsü",
+                "ekran görüntüsü al",
+                "ekranı göster",
+                "ekranı görüntüle",
+                "ekranı çek",
+                "ekran resmi"
+            ],
+
+            command:
+                "screenshot"
+        },
+
+
+        /*
+         * SYSTEM STATUS
+         */
+
+        {
+            keywords: [
+                "system_status",
+                "system status",
+                "sistem durumu",
+                "sistem durumunu göster",
+                "bilgisayar durumu",
+                "pc durumu",
+                "bilgisayarın durumunu göster",
+                "sistemi kontrol et"
+            ],
+
+            command:
+                "system_status"
+        },
+
+
+        /*
+         * MOUSE MOVE
+         */
+
+        {
+            keywords: [
+                "mouse_move",
+                "mouse move",
+                "fareyi hareket ettir",
+                "fareyi götür"
+            ],
+
+            command:
+                "mouse_move"
+        },
+
+
+        /*
+         * MOUSE CLICK
+         */
+
+        {
+            keywords: [
+                "mouse_click",
+                "mouse click",
+                "fareye tıkla",
+                "fare ile tıkla",
+                "tıkla"
+            ],
+
+            command:
+                "mouse_click"
+        },
+
+
+        /*
+         * TYPE TEXT
+         */
+
+        {
+            keywords: [
+                "type_text",
+                "type text",
+                "metin yaz",
+                "yaz"
+            ],
+
+            command:
+                "type_text"
+        },
+
+
+        /*
+         * KEY PRESS
+         */
+
+        {
+            keywords: [
+                "key_press",
+                "key press",
+                "tuşa bas",
+                "tuşa bas"
+            ],
+
+            command:
+                "key_press"
+        },
+
+
+        /*
+         * OPEN APP
+         */
+
+        {
+            keywords: [
+                "open_app",
+                "open app",
+                "uygulama aç",
+                "program aç",
+                "uygulamayı aç"
+            ],
+
+            command:
+                "open_app"
+        },
+
+
+        /*
+         * LOCK SCREEN
+         */
+
+        {
+            keywords: [
+                "lock_screen",
+                "lock screen",
+                "ekranı kilitle",
+                "bilgisayarı kilitle",
+                "pc'yi kilitle",
+                "pc yi kilitle"
+            ],
+
+            command:
+                "lock_screen"
         }
 
     ];
 
+
+    /*
+     * Komut eşleştirme
+     */
 
     for (
         const item of commandMap
@@ -1096,6 +1263,11 @@ async function sendBrainCommand() {
 
         if (found) {
 
+            addLog(
+                `Beluga Brain: ${item.command}`,
+                "system"
+            );
+
             await sendCommand(
                 item.command
             );
@@ -1104,6 +1276,10 @@ async function sendBrainCommand() {
         }
     }
 
+
+    /*
+     * Komut bulunamadı
+     */
 
     addLog(
         "Beluga Brain: Bu komut için henüz bir işlem tanımlanmadı.",
