@@ -233,9 +233,9 @@ class BelugaAgent:
         while True:
             try:
                 self.sio.connect(
-                    self.config["gateway_url"],
-                    transports=["websocket"]
-                )
+    self.config["gateway_url"],
+    transports=["polling", "websocket"]
+)
 
                 self.sio.wait()
 
